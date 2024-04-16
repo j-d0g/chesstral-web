@@ -12,7 +12,7 @@ type Move = {
 const Board: React.FC = () => {
     const [chess, setChess] = useState<Chess>(new Chess());
     const [playerTurn, setPlayerTurn] = useState<'w' | 'b'>('w');
-    const [selectedEngine, setSelectedEngine] = useState<string>('mistral-7b');
+    const [selectedEngine, setSelectedEngine] = useState<string>('open-mistral-7b');
     const [commentary, setCommentary] = useState<string>('');
 
     const handleMove = (move: Move) => {
