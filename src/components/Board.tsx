@@ -12,7 +12,7 @@ type Move = {
 const Board: React.FC = () => {
     const [chess, setChess] = useState<Chess>(new Chess());
     const [playerTurn, setPlayerTurn] = useState<'w' | 'b'>('w');
-    const [selectedEngine, setSelectedEngine] = useState<string>('stockfish');
+    const [selectedEngine, setSelectedEngine] = useState<string>('mistral-7b');
     const [commentary, setCommentary] = useState<string>('');
 
     const handleMove = (move: Move) => {
@@ -22,7 +22,8 @@ const Board: React.FC = () => {
             setChess(new Chess(chess.fen()));
             setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
         }
-        if (playerTurn === 'b') {
+        // Handle game won by user
+        if (playerTurn === 'b' && !chess.isCheckmate()) {
             fetchComputerMove();
         }
     };
