@@ -12,6 +12,7 @@ type Move = {
 type ChatMessage = {
   engineName: string;
   moveNumber: string;
+
   moveSequence: string;
   commentary: string;
 };
@@ -21,42 +22,53 @@ const Board: React.FC = () => {
   const [playerTurn, setPlayerTurn] = useState<'w' | 'b'>('w');
   const [selectedEngine, setSelectedEngine] = useState<string>('open-mistral-7b');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [moveNumber, setMoveNumber] = useState<number>(1);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
+  const [lastMove, setLastMove] = useState<Move | null>(null);
+  const [lastFen, setLastFen] = useState<string>(new Chess().fen());
 
-  const handleMove = (move: Move) => {
-    // Handle the move logic here
-    const result = chess.move(move);
-    if (result) {
-      setChess(new Chess(chess.fen()));
-      setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
+const handleMove = (move: Move) => {
+  if (chess.isGameOver()) {
+    return;
+  }
+  setLastFen(chess.fen());
+  const result = chess.move(move);
+  if (result) {
+    setChess(new Chess(chess.fen()));
+    setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
+    setLastMove(move)
 
-      // Add your move to the chat history
-      const moveNumber = Math.floor((chess.history().length + 1) / 2);
-      setChatHistory((prevHistory) => [
-        ...prevHistory,
-        {
-          engineName: 'You',
-          moveNumber: `${moveNumber}.`,
-          moveSequence: chess.pgn().split(/\d+\./).pop()?.trim() || '',
-          commentary: '',
-        },
-      ]);
-    }
-    // Handle game won by user
-    if (playerTurn === 'b' && !chess.isCheckmate()) {
-      fetchComputerMove();
-    }
-  };
-
-  const fetchComputerMove = async () => {
-    const response = await fetch('http://127.0.0.1:5000/api/move', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Add the user's move to the chat history
+    const moveNumber = Math.floor((chess.history().length + 1) / 2);
+    setChatHistory((prevHistory) => [
+      ...prevHistory,
+      {
+        engineName: 'You',
+        moveNumber: `${moveNumber}.`,
+        moveSequence: chess.pgn().split(/\d+\./).pop()?.trim() || '',
+        commentary: '',
       },
-      body: JSON.stringify({ fen: chess.fen(), engine: selectedEngine }),
-    });
+    ]);
+
+    // Pass the last move to the fetchComputerMove function
+    if (playerTurn === 'b') {
+      fetchComputerMove(move);
+    }
+  }
+};
+
+const fetchComputerMove = async (lastMove: Move) => {
+  const response = await fetch('http://127.0.0.1:5000/api/move', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fen: lastFen,
+      engine: selectedEngine,
+      lastMove: lastMove, // Include the last move in the request payload
+    }),
+  });
+
 
     if (response.ok) {
       const data = await response.json();
@@ -81,10 +93,10 @@ const Board: React.FC = () => {
   };
 
   useEffect(() => {
-    if (playerTurn === 'b') {
-      fetchComputerMove();
+    if (playerTurn === 'b' && lastMove) {
+      fetchComputerMove(lastMove);
     }
-  }, [playerTurn]);
+  }, [playerTurn, lastMove]);
 
   const handleGameOver = () => {
     if (chess.isGameOver()) {
@@ -148,7 +160,7 @@ const Board: React.FC = () => {
           borderRadius: '5px',
         }}
       >
-        <h3>Chat with {selectedEngine}:</h3>
+        <h3>{selectedEngine}'s thoughts: </h3>
         {chatHistory.map((message, index) => (
           <div key={index} style={{ marginBottom: '10px' }}>
             <strong>{message.engineName}:</strong>
