@@ -25,6 +25,9 @@ const Board: React.FC = () => {
   const chatHistoryRef = useRef<HTMLDivElement>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [lastFen, setLastFen] = useState<string>(new Chess().fen());
+  const [pgnMoves, setPgnMoves] = useState<string>('1');
+  const [contextOn, setContextOn] = useState<boolean>(false);
+
 
 const handleMove = (move: Move) => {
   if (chess.isGameOver()) {
@@ -38,7 +41,7 @@ const handleMove = (move: Move) => {
     setLastMove(move)
 
     // Add the user's move to the chat history
-    const moveNumber = Math.floor((chess.history().length + 1) / 2);
+    const moveNumber = ((pgnMoves.length/2)+1)
     setChatHistory((prevHistory) => [
       ...prevHistory,
       {
@@ -46,6 +49,7 @@ const handleMove = (move: Move) => {
         moveNumber: `${moveNumber}.`,
         moveSequence: chess.pgn().split(/\d+\./).pop()?.trim() || '',
         commentary: '',
+        fen: chess.fen(),
       },
     ]);
 
@@ -66,37 +70,78 @@ const fetchComputerMove = async (lastMove: Move) => {
       fen: lastFen,
       engine: selectedEngine,
       lastMove: lastMove, // Include the last move in the request payload
+      contextOn: contextOn, // Include the contextOn flag in the request payload
+
     }),
   });
+  if (response.ok) {
+    const data = await response.json();
+    const move = data.completion.move;
+    const result = chess.move(move);
+    const commentary = 'data.completion.thoughts';
+    const pgn = data.board_info.pgn
 
-
-    if (response.ok) {
-      const data = await response.json();
-      const move = data.move;
-      const result = chess.move(move);
-      const commentary = data.thoughts;
-      if (result) {
-        setChess(new Chess(chess.fen()));
-        setPlayerTurn('w');
-        const moveNumber = Math.floor((chess.history().length + 1) / 2);
-        setChatHistory((prevHistory) => [
-          ...prevHistory,
-          {
-            engineName: selectedEngine,
-            moveNumber: chess.turn() === 'w' ? `${moveNumber}.` : '',
-            moveSequence: chess.pgn().split(/\d+\./).pop()?.trim() || '',
-            commentary,
-          },
-        ]);
-      }
+    if (result) {
+      setPgnMoves(pgn)
+      setChess(new Chess(chess.fen()));
+      setPlayerTurn('w');
+      const moveNumber = pgn.length / 2
+      setChatHistory((prevHistory) => [
+        ...prevHistory,
+        {
+          engineName: selectedEngine,
+          moveNumber: chess.turn() === 'w' ? `${moveNumber}.` : '',
+          moveSequence: chess.pgn().split(/\d+\./).pop()?.trim() || '',
+          commentary,
+        },
+      ]);
     }
-  };
+  }
+};
+
+const toggleContext = () => {
+  setContextOn(!contextOn);
+};
+
+const fetchResetBoard = async () => {
+  const response = await fetch('http://127.0.0.1:5000/api/reset', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.ok) {
+    setPgnMoves('')
+    setChess(new Chess());
+    setChatHistory([]);
+  }
+};
+
+const fetchResetContext = async () => {
+  const response = await fetch('http://127.0.0.1:5000/api/reset_context', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.ok) {
+    setPgnMoves('')
+    setChess(new Chess());
+    setChatHistory([]);
+  }
+};
 
   useEffect(() => {
     if (playerTurn === 'b' && lastMove) {
       fetchComputerMove(lastMove);
     }
   }, [playerTurn, lastMove]);
+
+  useEffect(() => {
+    fetchResetBoard();
+  }, []);
 
   const handleGameOver = () => {
     if (chess.isGameOver()) {
@@ -130,17 +175,29 @@ const fetchComputerMove = async (lastMove: Move) => {
         <div style={{marginBottom: '10px'}}>
           <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine}/>
         </div>
-        <Chessboard
-            position={chess.fen()}
-            onDrop={(move: any) =>
-                handleMove({
-                  from: move.sourceSquare,
-                  to: move.targetSquare,
-                  promotion: 'q',
-                })
-            }
-            boardStyle={{
-              borderRadius: '5px',
+        <div style={{marginBottom: '10px'}}>
+          <button onClick={fetchResetBoard}>Reset Board</button>
+          <button
+              onClick={toggleContext}
+              style={{
+                backgroundColor: contextOn ? 'green' : 'grey',
+                marginLeft: '10px',
+              }}
+          >
+            {contextOn ? 'Context On' : 'Context Off'}
+          </button>
+        </div>
+          <Chessboard
+              position={chess.fen()}
+              onDrop={(move: any) =>
+                  handleMove({
+                    from: move.sourceSquare,
+                    to: move.targetSquare,
+                    promotion: 'q',
+                  })
+              }
+              boardStyle={{
+                borderRadius: '5px',
               boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
             }}
             darkSquareStyle={{backgroundColor: '#779952'}}
@@ -160,7 +217,7 @@ const fetchComputerMove = async (lastMove: Move) => {
           borderRadius: '5px',
         }}
       >
-        <h3>{selectedEngine}'s thoughts: </h3>
+        <h2 style={{marginLeft: '50px'}}>{selectedEngine.toUpperCase()}</h2>
         {chatHistory.map((message, index) => (
           <div key={index} style={{ marginBottom: '10px' }}>
             <strong>{message.engineName}:</strong>
