@@ -104,10 +104,10 @@ const Board: React.FC = () => {
     });
     if (response.ok) {
       const data = await response.json();
-      const move = data.completion.move;
+      const move = data.prompt.completion.move;
       const result = board.move(move);
-      const commentary = data.completion.thoughts;
-      const pgn = data.board_info.pgn
+      const commentary = data.prompt.completion.thoughts;
+      const pgn = data.board.pgn
 
       if (result) {
         setPgnMoves(pgn)
@@ -142,6 +142,7 @@ const Board: React.FC = () => {
     if (response.ok) {
       setPgnMoves('')
       setBoard(new Chess());
+      setFen(board.fen());
       setChatHistory([]);
     }
   };
@@ -184,7 +185,7 @@ const Board: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', backgroundColor: '#1c1c1c', color: '#fff', padding: '20px' }}>
-      <div style={{marginRight: '20px', marginTop: '5px'}}>
+      <div style={{margin: 'auto', marginTop: '5px', }}>
         <div style={{marginBottom: '10px'}}>
           <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine}/>
         </div>
@@ -238,14 +239,16 @@ const Board: React.FC = () => {
       <div
           ref={chatHistoryRef}
           style={{
-            width: '400px',
-            height: '600px',
+            width: '30%',
+            height: '545px',
             overflowY: 'scroll',
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: '#2c2c2c',
             padding: '10px',
             borderRadius: '5px',
+            marginTop: '60px',
+            marginRight: '30%',
         }}
       >
         <h2 style={{marginLeft: '50px'}}>{selectedEngine.toUpperCase()}</h2>
