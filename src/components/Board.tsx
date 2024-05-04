@@ -247,11 +247,11 @@ const Board: React.FC = () => {
             backgroundColor: '#2c2c2c',
             padding: '10px',
             borderRadius: '5px',
-            marginTop: '60px',
+            marginTop: '65px',
             marginRight: '30%',
         }}
       >
-        <h2 style={{marginLeft: '125px'}}>{selectedEngine.toUpperCase()}</h2>
+        <h2 style={{marginLeft: '33%'}}>{selectedEngine.toUpperCase()}</h2>
         {chatHistory.map((message, index) => (
           <div key={index} style={{ marginBottom: '10px', marginLeft: '10px' }}>
             <strong>{message.engineName}:</strong>
