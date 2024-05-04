@@ -184,62 +184,63 @@ const Board: React.FC = () => {
   }, [chatHistory]);
 
   return (
-    <div style={{ display: 'flex', backgroundColor: '#1c1c1c', color: '#fff', padding: '20px' }}>
-      <div style={{margin: 'auto', marginTop: '5px', }}>
-        <div style={{marginBottom: '10px'}}>
-          <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine}/>
-        </div>
-        <div style={{marginBottom: '10px'}}>
-          <button onClick={fetchResetBoard}>Reset Board</button>
-          <button
+    <div style={{ display: 'flex', justifyContent: 'center', backgroundColor: '#1c1c1c', color: '#fff', padding: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        <div style={{ marginRight: '20px' }}>
+          <div style={{ marginBottom: '10px' }}>
+            <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine} />
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <button onClick={fetchResetBoard}>Reset Board</button>
+            <button
               onClick={toggleContext}
               style={{
                 backgroundColor: contextOn ? 'green' : 'grey',
                 marginLeft: '10px',
               }}
-          >
-            {contextOn ? 'Context On' : 'Context Off'}
-          </button>
-        </div>
-        <Chessboard
+            >
+              {contextOn ? 'Context On' : 'Context Off'}
+            </button>
+          </div>
+          <Chessboard
             position={board.fen()}
             onDrop={(move: any) =>
-                handleMove({
-                  from: move.sourceSquare,
-                  to: move.targetSquare,
-                  promotion: 'q',
-                })
+              handleMove({
+                from: move.sourceSquare,
+                to: move.targetSquare,
+                promotion: 'q',
+              })
             }
             boardStyle={{
               borderRadius: '5px',
               boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
             }}
-            darkSquareStyle={{backgroundColor: '#779952'}}
-            lightSquareStyle={{backgroundColor: '#ebecd0'}}
-        />
-        <input
+            darkSquareStyle={{ backgroundColor: '#779952' }}
+            lightSquareStyle={{ backgroundColor: '#ebecd0' }}
+          />
+          <input
             type="text"
             name="fen"
             placeholder="Enter FEN string"
-            style={{marginTop: '10px', width: '99%'}}
+            style={{ marginTop: '10px', width: '99%' }}
             onChange={(event) => setFen(event.target.value)}
             onKeyDown={handleUpdateFen}
             value={fen}
-        />
-        <input
+          />
+          <input
             type="text"
             name="pgn"
             placeholder="Enter PGN sequence"
-            style={{marginTop: '7px', width: '99%'}}
+            style={{ marginTop: '7px', width: '99%' }}
             onChange={(event) => setPgnMoves(event.target.value)}
             onKeyDown={handleUpdatePGN}
             value={pgnMoves}
-        />
-      </div>
-      <div
+          />
+        </div>
+        <div
           ref={chatHistoryRef}
           style={{
-            width: '30%',
+            width: '500px',
             height: '545px',
             overflowY: 'scroll',
             display: 'flex',
@@ -247,20 +248,20 @@ const Board: React.FC = () => {
             backgroundColor: '#2c2c2c',
             padding: '10px',
             borderRadius: '5px',
-            marginTop: '65px',
-            marginRight: '30%',
-        }}
-      >
-        <h2 style={{marginLeft: '33%'}}>{selectedEngine.toUpperCase()}</h2>
-        {chatHistory.map((message, index) => (
-          <div key={index} style={{ marginBottom: '10px', marginLeft: '10px' }}>
-            <strong>{message.engineName}:</strong>
-            <p>
-              {message.moveNumber} {message.moveSequence}
-            </p>
-            <p>{message.commentary}</p>
-          </div>
-        ))}
+            marginTop: '6%',
+          }}
+        >
+          <h2 style={{ textAlign: 'center' }}>{selectedEngine.toUpperCase()}</h2>
+          {chatHistory.map((message, index) => (
+            <div key={index} style={{ marginBottom: '10px' }}>
+              <strong>{message.engineName}:</strong>
+              <p>
+                {message.moveNumber} {message.moveSequence}
+              </p>
+              <p>{message.commentary}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
