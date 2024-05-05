@@ -25,8 +25,9 @@ const Board: React.FC = () => {
   const chatHistoryRef = useRef<HTMLDivElement>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [fen, setFen] = useState<string>(new Chess().fen());
-  const [pgnMoves, setPgnMoves] = useState<string>('1');
+  const [pgnMoves, setPgnMoves] = useState<string>('');
   const [pgnStr, setPgnStr] = useState<string>('');
+  const [moveNum, setMoveNum] = useState<number>(0);
   const [contextOn, setContextOn] = useState<boolean>(false);
 
   const handleUpdateFen = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -66,7 +67,7 @@ const Board: React.FC = () => {
         setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
         setLastMove(move)
         const moveStr = board.pgn().split(/\d+\./).pop()?.trim() || ''
-        const moveNumber = ((pgnMoves.length/2)+1)
+        const moveNumber = moveNum + 1
         setPgnStr(pgnStr + moveNumber + '. ' + moveStr + ' ')
         setChatHistory((prevHistory) => [
           ...prevHistory,
@@ -115,13 +116,14 @@ const Board: React.FC = () => {
       const result = board.move(move);
       const commentary = data.prompt.completion.thoughts;
       const pgn = data.board.pgn
+      const moveNumber = (data.board.move_num + 1) / 2
 
       if (result) {
         setPgnMoves(pgn)
         setPgnStr(pgnStr + move + ' ')
+        setMoveNum(moveNumber)
         setBoard(new Chess(board.fen()));
         setPlayerTurn('w');
-        const moveNumber = pgnMoves.length / 2
         setChatHistory((prevHistory) => [
           ...prevHistory,
           {
@@ -152,6 +154,7 @@ const Board: React.FC = () => {
       setPgnStr('')
       setBoard(new Chess());
       setFen(new Chess().fen());
+      setMoveNum(0)
       setChatHistory([]);
     }
   };
