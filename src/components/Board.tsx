@@ -142,7 +142,7 @@ const Board: React.FC = () => {
     if (response.ok) {
       setPgnMoves('')
       setBoard(new Chess());
-      setFen(board.fen());
+      setFen(new Chess().fen());
       setChatHistory([]);
     }
   };
@@ -240,15 +240,16 @@ const Board: React.FC = () => {
         <div
           ref={chatHistoryRef}
           style={{
-            width: '500px',
-            height: '545px',
+            width: '400px',
+            height: '600px',
             overflowY: 'scroll',
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: '#2c2c2c',
             padding: '10px',
             borderRadius: '5px',
-            marginTop: '6%',
+            marginTop: '60px',
+            marginBottom: '5px',
           }}
         >
           <h2 style={{ textAlign: 'center' }}>{selectedEngine.toUpperCase()}</h2>
