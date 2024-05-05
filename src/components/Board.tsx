@@ -26,6 +26,7 @@ const Board: React.FC = () => {
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [fen, setFen] = useState<string>(new Chess().fen());
   const [pgnMoves, setPgnMoves] = useState<string>('1');
+  const [pgnStr, setPgnStr] = useState<string>('');
   const [contextOn, setContextOn] = useState<boolean>(false);
 
   const handleUpdateFen = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -44,47 +45,53 @@ const Board: React.FC = () => {
   const handleUpdatePGN = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       const chess = new Chess();
-      chess.loadPgn(pgnMoves);
-      if (chess.pgn() === pgnMoves) {
+      try {
+        chess.loadPgn(pgnStr);
         setBoard(chess);
         setPlayerTurn(chess.turn() as 'w' | 'b');
         setChatHistory([]);
-      } else {
+      } catch (error) {
         alert('Invalid PGN sequence');
+        fetchResetBoard();
       }
     }
   }
 
   const handleMove = (move: Move) => {
     setFen(board.fen())
-    const result = board.move(move);
-
-    if (result) {
-      setBoard(new Chess(board.fen()));
-      setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
-      setLastMove(move)
+    try {
+      const result = board.move(move);
+      if (result) {
+        setBoard(new Chess(board.fen()));
+        setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
+        setLastMove(move)
+        const moveStr = board.pgn().split(/\d+\./).pop()?.trim() || ''
+        const moveNumber = ((pgnMoves.length/2)+1)
+        setPgnStr(pgnStr + moveNumber + '. ' + moveStr + ' ')
+        setChatHistory((prevHistory) => [
+          ...prevHistory,
+          {
+            engineName: 'You',
+            moveNumber: `${moveNumber}.`,
+            moveSequence: moveStr,
+            commentary: '',
+            fen: board.fen(),
+          },
+        ]);
+      }
+    } catch (error) {
+      return
+    }
 
       // Add the user's move to the chat history
-      const moveNumber = ((pgnMoves.length/2)+1)
-      setChatHistory((prevHistory) => [
-        ...prevHistory,
-        {
-          engineName: 'You',
-          moveNumber: `${moveNumber}.`,
-          moveSequence: board.pgn().split(/\d+\./).pop()?.trim() || '',
-          commentary: '',
-          fen: board.fen(),
-        },
-      ]);
 
     if (board.isGameOver()) {
       return;
     }
 
-      // Pass the last move to the fetchComputerMove function
-      if (playerTurn === 'b') {
-        fetchComputerMove(move);
-      }
+    // Pass the last move to the fetchComputerMove function
+    if (playerTurn === 'b') {
+      fetchComputerMove(move);
     }
   };
 
@@ -111,9 +118,10 @@ const Board: React.FC = () => {
 
       if (result) {
         setPgnMoves(pgn)
+        setPgnStr(pgnStr + move + ' ')
         setBoard(new Chess(board.fen()));
         setPlayerTurn('w');
-        const moveNumber = pgn.length / 2
+        const moveNumber = pgnMoves.length / 2
         setChatHistory((prevHistory) => [
           ...prevHistory,
           {
@@ -141,6 +149,7 @@ const Board: React.FC = () => {
 
     if (response.ok) {
       setPgnMoves('')
+      setPgnStr('')
       setBoard(new Chess());
       setFen(new Chess().fen());
       setChatHistory([]);
@@ -232,9 +241,9 @@ const Board: React.FC = () => {
             name="pgn"
             placeholder="Enter PGN sequence"
             style={{ marginTop: '7px', width: '99%' }}
-            onChange={(event) => setPgnMoves(event.target.value)}
+            onChange={(event) => setPgnStr(event.target.value)}
             onKeyDown={handleUpdatePGN}
-            value={pgnMoves}
+            value={pgnStr}
           />
         </div>
         <div
