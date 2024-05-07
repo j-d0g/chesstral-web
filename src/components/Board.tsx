@@ -25,35 +25,36 @@ const Board: React.FC = () => {
   const chatHistoryRef = useRef<HTMLDivElement>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [fen, setFen] = useState<string>(new Chess().fen());
-  const [pgnMoves, setPgnMoves] = useState<string>('');
+  const [pgnMoves, setPgnMoves] = useState<string[]>([]);
   const [pgnStr, setPgnStr] = useState<string>('');
   const [moveNum, setMoveNum] = useState<number>(0);
   const [contextOn, setContextOn] = useState<boolean>(false);
+  const [conversation, setConversation] = useState<[]>([]);
 
   const handleUpdateFen = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
-      const chess = new Chess(fen);
-      if (chess.fen() === fen) {
-        setBoard(chess);
-        setPlayerTurn(chess.turn() as 'w' | 'b');
-        setChatHistory([]);
+      const new_board = new Chess(fen);
+      if (new_board.fen() === fen) {
+        resetBoard()
+        setBoard(new_board);
+        setPlayerTurn(new_board.turn() as 'w' | 'b');
       } else {
         alert('Invalid FEN string');
       }
     }
   }
 
+
   const handleUpdatePGN = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       const chess = new Chess();
       try {
         chess.loadPgn(pgnStr);
+        resetBoard()
         setBoard(chess);
         setPlayerTurn(chess.turn() as 'w' | 'b');
-        setChatHistory([]);
       } catch (error) {
         alert('Invalid PGN sequence');
-        fetchResetBoard();
       }
     }
   }
@@ -68,7 +69,9 @@ const Board: React.FC = () => {
         setLastMove(move)
         const moveStr = board.pgn().split(/\d+\./).pop()?.trim() || ''
         const moveNumber = moveNum + 1
+        setPgnMoves(pgnMoves.concat(moveStr))
         setPgnStr(pgnStr + moveNumber + '. ' + moveStr + ' ')
+        setFen(board.fen())
         setChatHistory((prevHistory) => [
           ...prevHistory,
           {
@@ -76,7 +79,6 @@ const Board: React.FC = () => {
             moveNumber: `${moveNumber}.`,
             moveSequence: moveStr,
             commentary: '',
-            fen: board.fen(),
           },
         ]);
       }
@@ -84,19 +86,14 @@ const Board: React.FC = () => {
       return
     }
 
-      // Add the user's move to the chat history
-
-    if (board.isGameOver()) {
-      return;
-    }
-
     // Pass the last move to the fetchComputerMove function
-    if (playerTurn === 'b') {
+    if (!board.isGameOver() && playerTurn === 'b') {
       fetchComputerMove(move);
     }
   };
 
   const fetchComputerMove = async (lastMove: Move) => {
+    const context = contextOn ? conversation : []
     const response = await fetch('http://127.0.0.1:5000/api/move', {
       method: 'POST',
       headers: {
@@ -105,8 +102,9 @@ const Board: React.FC = () => {
       body: JSON.stringify({
         fen: fen,
         engine: selectedEngine,
+        pgn: pgnMoves,
         lastMove: lastMove, // Include the last move in the request payload
-        contextOn: contextOn, // Include the contextOn flag in the request payload
+        context: context,
 
       }),
     });
@@ -117,9 +115,10 @@ const Board: React.FC = () => {
       const commentary = data.prompt.completion.thoughts;
       const pgn = data.board.pgn
       const moveNumber = (data.board.move_num + 1) / 2
+      setConversation(data.prompt.context)
 
       if (result) {
-        setPgnMoves(pgn)
+        setPgnMoves(pgnMoves.concat(move))
         setPgnStr(pgnStr + move + ' ')
         setMoveNum(moveNumber)
         setBoard(new Chess(board.fen()));
@@ -141,22 +140,16 @@ const Board: React.FC = () => {
     setContextOn(!contextOn);
   };
 
-  const fetchResetBoard = async () => {
-    const response = await fetch('http://127.0.0.1:5000/api/reset', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (response.ok) {
-      setPgnMoves('')
-      setPgnStr('')
-      setBoard(new Chess());
-      setFen(new Chess().fen());
-      setMoveNum(0)
-      setChatHistory([]);
-    }
+  const resetBoard = async () => {
+    setConversation([])
+    setMoveNum(0)
+    setPgnMoves([])
+    setPgnStr('')
+    setChatHistory([])
+    setBoard(new Chess());
+    setPlayerTurn('w');
+    setLastMove(null);
+    setFen(new Chess().fen());
   };
 
   useEffect(() => {
@@ -166,7 +159,7 @@ const Board: React.FC = () => {
   }, [playerTurn, lastMove]);
 
   useEffect(() => {
-    fetchResetBoard();
+    resetBoard();
   }, []);
 
   const handleGameOver = () => {
@@ -203,7 +196,7 @@ const Board: React.FC = () => {
             <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine} />
           </div>
           <div style={{ marginBottom: '10px' }}>
-            <button onClick={fetchResetBoard}>Reset Board</button>
+            <button onClick={resetBoard}>Reset Board</button>
             <button
               onClick={toggleContext}
               style={{
