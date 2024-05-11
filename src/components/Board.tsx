@@ -1,7 +1,10 @@
+// Board.tsx
+
 import React, { useEffect, useState, useRef } from 'react';
-import { Chess } from 'chess.js';
+import { Chess, Move as ChessMove } from 'chess.js';
 import Chessboard from 'chessboardjsx';
 import EngineSelector from './EngineSelector';
+import '../styles/Board.css';
 
 type Move = {
   from: string;
@@ -12,155 +15,95 @@ type Move = {
 type ChatMessage = {
   engineName: string;
   moveNumber: string;
-
   moveSequence: string;
   commentary: string;
 };
 
 const Board: React.FC = () => {
   const [board, setBoard] = useState<Chess>(new Chess());
-  const [playerTurn, setPlayerTurn] = useState<'w' | 'b'>('w');
   const [selectedEngine, setSelectedEngine] = useState<string>('open-mistral-7b');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
-  const [lastMove, setLastMove] = useState<Move | null>(null);
-  const [fen, setFen] = useState<string>(new Chess().fen());
-  const [pgnMoves, setPgnMoves] = useState<string[]>([]);
-  const [pgnStr, setPgnStr] = useState<string>('');
-  const [moveNum, setMoveNum] = useState<number>(0);
   const [contextOn, setContextOn] = useState<boolean>(false);
   const [conversation, setConversation] = useState<[]>([]);
 
-  const handleUpdateFen = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      const new_board = new Chess(fen);
-      if (new_board.fen() === fen) {
-        resetBoard()
-        setBoard(new_board);
-        setPlayerTurn(new_board.turn() as 'w' | 'b');
-      } else {
-        alert('Invalid FEN string');
-      }
+  useEffect(() => {
+    handleGameOver();
+  }, [board]);
+
+  useEffect(() => {
+    if (chatHistoryRef.current) {
+      chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
     }
-  }
+  }, [chatHistory]);
 
-
-  const handleUpdatePGN = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      const chess = new Chess();
-      try {
-        chess.loadPgn(pgnStr);
-        resetBoard()
-        setBoard(chess);
-        setPlayerTurn(chess.turn() as 'w' | 'b');
-      } catch (error) {
-        alert('Invalid PGN sequence');
-      }
-    }
-  }
-
-  const handleMove = (move: Move) => {
-    setFen(board.fen())
-    try {
-      const result = board.move(move);
-      if (result) {
-        setBoard(new Chess(board.fen()));
-        setPlayerTurn(playerTurn === 'w' ? 'b' : 'w');
-        setLastMove(move)
-        const moveStr = board.pgn().split(/\d+\./).pop()?.trim() || ''
-        const moveNumber = moveNum + 1
-        setPgnMoves(pgnMoves.concat(moveStr))
-        setPgnStr(pgnStr + moveNumber + '. ' + moveStr + ' ')
-        setFen(board.fen())
-        setChatHistory((prevHistory) => [
-          ...prevHistory,
-          {
-            engineName: 'You',
-            moveNumber: `${moveNumber}.`,
-            moveSequence: moveStr,
-            commentary: '',
-          },
-        ]);
-      }
-    } catch (error) {
-      return
-    }
-
-    // Pass the last move to the fetchComputerMove function
-    if (!board.isGameOver() && playerTurn === 'b') {
-      fetchComputerMove(move);
+  const handleUpdateBoard = (newBoard: Chess) => {
+    setBoard(newBoard);
+    if (newBoard.turn() === 'b') {
+      fetchComputerMove(newBoard);
     }
   };
 
-  const fetchComputerMove = async (lastMove: Move) => {
-    const context = contextOn ? conversation : []
+  const handleMove = (move: Move) => {
+    const newBoard = board;
+    try {
+      const result = newBoard.move(move);
+      handleUpdateBoard(newBoard);
+      addChatMessage('You', newBoard, result);
+    } catch (error) {}
+  };
+
+  const fetchComputerMove = async (currentBoard: Chess) => {
+    const context = contextOn ? conversation : [];
+    const pgnMoves = currentBoard.history();
     const response = await fetch('http://127.0.0.1:5000/api/move', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        fen: fen,
+        fen: currentBoard.fen(),
         engine: selectedEngine,
         pgn: pgnMoves,
-        lastMove: lastMove, // Include the last move in the request payload
         context: context,
-
       }),
     });
     if (response.ok) {
       const data = await response.json();
       const move = data.prompt.completion.move;
-      const result = board.move(move);
-      const commentary = data.prompt.completion.thoughts;
-      const pgn = data.board.pgn
-      const moveNumber = (data.board.move_num + 1) / 2
-      setConversation(data.prompt.context)
-
+      const newBoard = board;
+      const result = newBoard.move(move);
       if (result) {
-        setPgnMoves(pgnMoves.concat(move))
-        setPgnStr(pgnStr + move + ' ')
-        setMoveNum(moveNumber)
-        setBoard(new Chess(board.fen()));
-        setPlayerTurn('w');
-        setChatHistory((prevHistory) => [
-          ...prevHistory,
-          {
-            engineName: selectedEngine,
-            moveNumber: board.turn() === 'w' ? `${moveNumber}.` : '',
-            moveSequence: board.pgn().split(/\d+\./).pop()?.trim() || '',
-            commentary,
-          },
-        ]);
+        handleUpdateBoard(newBoard);
+        addChatMessage(selectedEngine, newBoard, result, data.prompt.completion.thoughts);
+        setConversation(data.prompt.context);
       }
     }
+  };
+
+  const addChatMessage = (engineName: string, currentBoard: Chess, move: ChessMove, commentary?: string) => {
+    const moveNumber = Math.ceil((currentBoard.history().length) / 2);
+    const moveSequence = currentBoard.pgn().split(/\d+\./).pop()?.trim() || '';
+    setChatHistory((prevHistory) => [
+      ...prevHistory,
+      {
+        engineName,
+        moveNumber: `${moveNumber}.`,
+        moveSequence,
+        commentary: commentary || '',
+      },
+    ]);
   };
 
   const toggleContext = () => {
     setContextOn(!contextOn);
   };
 
-  const resetBoard = async () => {
-    setConversation([])
-    setMoveNum(0)
-    setPgnMoves([])
-    setPgnStr('')
-    setChatHistory([])
-    setBoard(new Chess());
-    setPlayerTurn('w');
-    setLastMove(null);
-    setFen(new Chess().fen());
+  const resetBoard = () => {
+    setConversation([]);
+    setChatHistory([]);
+    handleUpdateBoard(new Chess());
   };
-
-  useEffect(() => {
-    if (playerTurn === 'b' && lastMove) {
-      fetchComputerMove(lastMove);
-    }
-  }, [playerTurn, lastMove]);
-
-  useEffect(() => {
-    resetBoard();
-  }, []);
 
   const handleGameOver = () => {
     if (board.isGameOver()) {
@@ -178,31 +121,18 @@ const Board: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    handleGameOver();
-  }, [board]);
-
-  useEffect(() => {
-    if (chatHistoryRef.current) {
-      chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
-    }
-  }, [chatHistory]);
-
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', backgroundColor: '#1c1c1c', color: '#fff', padding: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-        <div style={{ marginRight: '20px' }}>
-          <div style={{ marginBottom: '10px' }}>
+    <div className="board-container">
+      <div className="board-wrapper">
+        <div className="board-controls">
+          <div className="engine-selector">
             <EngineSelector selectedEngine={selectedEngine} onEngineChange={setSelectedEngine} />
           </div>
-          <div style={{ marginBottom: '10px' }}>
+          <div className="board-buttons">
             <button onClick={resetBoard}>Reset Board</button>
             <button
               onClick={toggleContext}
-              style={{
-                backgroundColor: contextOn ? 'green' : 'grey',
-                marginLeft: '10px',
-              }}
+              className={`context-button ${contextOn ? 'on' : ''}`}
             >
               {contextOn ? 'Context On' : 'Context Off'}
             </button>
@@ -218,48 +148,49 @@ const Board: React.FC = () => {
             }
             boardStyle={{
               borderRadius: '5px',
-              boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
+              boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)',
             }}
             darkSquareStyle={{ backgroundColor: '#779952' }}
             lightSquareStyle={{ backgroundColor: '#ebecd0' }}
           />
-          <input
-            type="text"
-            name="fen"
-            placeholder="Enter FEN string"
-            style={{ marginTop: '10px', width: '99%' }}
-            onChange={(event) => setFen(event.target.value)}
-            onKeyDown={handleUpdateFen}
-            value={fen}
-          />
-          <input
-            type="text"
-            name="pgn"
-            placeholder="Enter PGN sequence"
-            style={{ marginTop: '7px', width: '99%' }}
-            onChange={(event) => setPgnStr(event.target.value)}
-            onKeyDown={handleUpdatePGN}
-            value={pgnStr}
-          />
+          <div className="board-importer">
+            <input
+              type="text"
+              name="fen"
+              placeholder="Enter FEN string"
+              className="fen-input"
+              onChange={(event) => {
+                const newBoard = new Chess(event.target.value);
+                if (newBoard.fen() === event.target.value) {
+                  handleUpdateBoard(newBoard);
+                } else {
+                  alert('Invalid FEN string');
+                }
+              }}
+              value={board.fen()}
+            />
+            <input
+              type="text"
+              name="pgn"
+              placeholder="Enter PGN sequence"
+              className="pgn-input"
+              onChange={(event) => {
+                const newBoard = new Chess();
+                try {
+                  newBoard.loadPgn(event.target.value);
+                  handleUpdateBoard(newBoard);
+                } catch (error) {
+                  alert('Invalid PGN sequence');
+                }
+              }}
+              value={board.pgn()}
+            />
+          </div>
         </div>
-        <div
-          ref={chatHistoryRef}
-          style={{
-            width: '400px',
-            height: '600px',
-            overflowY: 'scroll',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: '#2c2c2c',
-            padding: '10px',
-            borderRadius: '5px',
-            marginTop: '60px',
-            marginBottom: '5px',
-          }}
-        >
-          <h2 style={{ textAlign: 'center' }}>{selectedEngine.toUpperCase()}</h2>
+        <div ref={chatHistoryRef} className="chat-history">
+          <h2>{selectedEngine.toUpperCase()}</h2>
           {chatHistory.map((message, index) => (
-            <div key={index} style={{ marginBottom: '10px' }}>
+            <div key={index} className="chat-message">
               <strong>{message.engineName}:</strong>
               <p>
                 {message.moveNumber} {message.moveSequence}
