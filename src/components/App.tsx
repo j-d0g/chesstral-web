@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Board from './components/Board';
+import Board from './Board';
 
 const App: React.FC = () => {
 

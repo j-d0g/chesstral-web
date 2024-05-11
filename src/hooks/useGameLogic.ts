@@ -79,7 +79,10 @@ function useGameLogic() {
       const pgnString = (event.target as HTMLInputElement).value;
       const newBoard = new Chess();
       try {
+        console.log(pgnString)
         newBoard.loadPgn(pgnString);
+        console.log(newBoard.pgn())
+        console.log(newBoard.history().pop())
         handleUpdateBoard(newBoard);
       } catch (error) {
         alert('Invalid PGN sequence');
