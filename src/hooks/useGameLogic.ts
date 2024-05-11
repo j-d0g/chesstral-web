@@ -1,37 +1,26 @@
 // useChessGame.ts
 import {useEffect, useRef, useState} from 'react';
-import {Chess, Move as ChessMove } from 'chess.js';
+import {Chess, Move as ChessMove} from 'chess.js';
+import {CommentaryMessage} from '../types/CommentaryMessage';
+import {BoardMove} from "../types/BoardMove";
 
-type Move = {
-  from: string;
-  to: string;
-  promotion?: string;
-};
-
-type ChatMessage = {
-  engineName: string;
-  moveNumber: string;
-  moveSequence: string;
-  commentary: string;
-};
-
-function useChessGame(initialEngine: string) {
+function useGameLogic() {
   const [board, setBoard] = useState<Chess>(new Chess());
-  const [selectedEngine, setSelectedEngine] = useState<string>(initialEngine);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [selectedEngine, setSelectedEngine] = useState<string>('open-mistral-7b');
+  const [commentaryHistory, setCommentaryHistory] = useState<CommentaryMessage[]>([]);
   const [contextOn, setContextOn] = useState<boolean>(false);
   const [conversation, setConversation] = useState<[]>([]);
-  const chatHistoryRef = useRef<HTMLDivElement>(null);
+  const commentaryHistoryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     handleGameOver();
   }, [board]);
 
   useEffect(() => {
-    if (chatHistoryRef.current) {
-      chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
+    if (commentaryHistoryRef.current) {
+      commentaryHistoryRef.current.scrollTop = commentaryHistoryRef.current.scrollHeight;
     }
-  }, [chatHistory]);
+  }, [commentaryHistory]);
   const handleUpdateBoard = (newBoard: Chess) => {
     setBoard(newBoard);
     if (newBoard.turn() === 'b') {
@@ -39,12 +28,12 @@ function useChessGame(initialEngine: string) {
     }
   };
 
-  const handleMove = (move: Move) => {
+  const handleMove = (move: BoardMove, commentary: string = "", engine: string = "You") => {
     const newBoard = board;
     try {
       const result = newBoard.move(move);
       handleUpdateBoard(newBoard);
-      addChatMessage('You', newBoard, result);
+      addCommentaryMessage(engine, newBoard, result, commentary);
     } catch (error) {}
   };
 
@@ -66,13 +55,9 @@ function useChessGame(initialEngine: string) {
     if (response.ok) {
       const data = await response.json();
       const move = data.prompt.completion.move;
-      const newBoard = board;
-      const result = newBoard.move(move);
-      if (result) {
-        handleUpdateBoard(newBoard);
-        addChatMessage(selectedEngine, newBoard, result, data.prompt.completion.thoughts);
-        setConversation(data.prompt.context);
-      }
+      const commentary = data.prompt.completion.thoughts;
+      setConversation(data.prompt.context);
+      handleMove(move, commentary, selectedEngine)
     }
   };
 
@@ -102,16 +87,16 @@ function useChessGame(initialEngine: string) {
     }
   };
 
-  const addChatMessage = (engineName: string, currentBoard: Chess, move: ChessMove, commentary?: string) => {
+  const addCommentaryMessage = (engineName: string, currentBoard: Chess, move: ChessMove, commentary: string) => {
     const moveNumber = Math.ceil((currentBoard.history().length) / 2);
     const moveSequence = currentBoard.pgn().split(/\d+\./).pop()?.trim() || '';
-    setChatHistory((prevHistory) => [
+    setCommentaryHistory((prevHistory) => [
       ...prevHistory,
       {
         engineName,
-        moveNumber: `${moveNumber}.`,
-        moveSequence,
-        commentary: commentary || '',
+        moveNumber: board.turn() === 'b' ? `${moveNumber}.` : `${moveNumber}...`,
+        moveSequence: board.turn() === 'b' ? moveSequence : moveSequence.split(' ')[1],
+        commentary: commentary,
       },
     ]);
   };
@@ -122,7 +107,7 @@ function useChessGame(initialEngine: string) {
 
   const resetBoard = () => {
     setConversation([]);
-    setChatHistory([]);
+    setCommentaryHistory([]);
     handleUpdateBoard(new Chess());
   };
 
@@ -142,7 +127,10 @@ function useChessGame(initialEngine: string) {
     }
   };
 
-  return { board, selectedEngine, chatHistory, conversation, contextOn, chatHistoryRef, handlePgnInput, handleFenInput, setSelectedEngine, toggleContext, resetBoard, handleMove, handleUpdateBoard };
+  return {
+    board, selectedEngine, commentaryHistory, conversation, contextOn, commentaryBoxRef: commentaryHistoryRef,
+    handlePgnInput, handleFenInput, setSelectedEngine, toggleContext, resetBoard, handleMove, handleUpdateBoard
+  };
 }
 
-export default useChessGame;
+export default useGameLogic;

@@ -1,0 +1,18 @@
+ /*CommentaryBox.css*/
+
+.commentary-box h2 {
+  text-align: center;
+  margin-top: 0px;
+  margin-bottom: 15px;
+}
+
+.commentary-message {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #3c3c3c;
+  border-radius: 5px;
+}
+
+.commentary-message strong {
+  color: #4caf50;
+}

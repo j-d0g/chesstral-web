@@ -1,0 +1,25 @@
+.engine-selector {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 5px;
+  margin-right: auto;
+}
+
+.board-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 5px;
+  margin-left: auto;
+}
+
+.context-button {
+  background-color: #555;
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.context-button.on {
+  background-color: #4caf50;
+}
