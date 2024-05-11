@@ -1,4 +1,4 @@
- /*CommentaryBox.css*/
+/* CommentaryBox.css */
 
 .commentary-box h2 {
   text-align: center;
@@ -11,16 +11,12 @@
   padding: 10px;
   background-color: #3c3c3c;
   border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
 }
 
 .commentary-message strong {
   color: #4caf50;
-}
-
-/* CommentaryBox.css */
-.commentary-message {
-  /* ... */
-  cursor: pointer;
 }
 
 .commentary-message.hovered {

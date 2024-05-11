@@ -3,7 +3,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {Chess, Move as ChessMove} from 'chess.js';
 import {CommentaryMessage} from '../types/CommentaryMessage';
 import {BoardMove} from "../types/BoardMove";
-import {fetchComputerMove} from "../Server/ChessAPIServer";
+import {fetchComputerMove} from "../server/ChessAPIServer";
 
 function useChess() {
   const [board, setBoard] = useState<Chess>(new Chess());

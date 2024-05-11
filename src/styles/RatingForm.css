@@ -12,6 +12,8 @@
 
 .rating-item .star-rating {
   display: inline-block;
+  direction: rtl;
+  align-self: start;
 }
 
 .rating-item .star {
@@ -20,7 +22,8 @@
   transition: color 0.2s;
 }
 
-.rating-item:hover .star {
+.rating-item .star:hover,
+.rating-item .star:hover ~ .star {
   color: #ffc107;
 }
 

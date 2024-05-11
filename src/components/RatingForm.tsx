@@ -1,5 +1,4 @@
-// RatingForm.tsx
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import '../styles/RatingForm.css';
 
 type RatingFormProps = {
@@ -12,61 +11,90 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit }) => {
   const [relevance, setRelevance] = useState(0);
   const [salience, setSalience] = useState(0);
   const [review, setReview] = useState('');
-  const [hoverValue, setHoverValue] = useState<{ [key: string]: number | null }>({
-    quality: null,
-    correctness: null,
-    relevance: null,
-    salience: null,
-  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit({ quality, correctness, relevance, salience, review });
+  useEffect(() => {
+    checkRatingFilled();
+  }, [quality, correctness, relevance, salience]);
+
+  const [isRatingFilled, setIsRatingFilled] = useState(false);
+  const checkRatingFilled = () => {
+    setIsRatingFilled(quality > 0 && correctness > 0 && relevance > 0 && salience > 0);
+
+  };
+  const handleStarClick = (category: string, value: number) => {
+    switch (category) {
+      case 'quality':
+        setQuality(value);
+        break;
+      case 'correctness':
+        setCorrectness(value);
+        break;
+      case 'relevance':
+        setRelevance(value);
+        break;
+      case 'salience':
+        setSalience(value);
+        break;
+      default:
+        break;
+    }
+
   };
 
-  const renderStarRating = (value: number, onChange: (rating: number) => void, category: string) => {
+  const renderStars = (category: string, value: number) => {
     const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      const starValue = i * 5;
-      const filled = hoverValue[category] !== null ? hoverValue[category]! >= starValue : value >= starValue;
+    for (let i = 5; i >= 1; i--) {
       stars.push(
         <span
           key={i}
-          className={`star ${filled ? 'filled' : ''}`}
-          onClick={() => onChange(starValue)}
-          onMouseEnter={() => setHoverValue((prevState) => ({ ...prevState, [category]: starValue }))}
-          onMouseLeave={() => setHoverValue((prevState) => ({ ...prevState, [category]: null }))}
+          className={`star ${i <= value ? 'filled' : ''}`}
+          onClick={() => handleStarClick(category, i)}
         >
-          ★
+          &#9733;
         </span>
       );
     }
-    return <div className="star-rating">{stars}</div>;
+    return stars;
+  };
+
+  const handleReviewChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setReview(event.target.value);
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSubmit({ quality, correctness, relevance, salience, review });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rating-form">
+    <form className="rating-form" onSubmit={handleSubmit}>
       <div className="rating-item">
-        <label>Quality:</label>
-        {renderStarRating(quality, setQuality, 'quality')}
+        <label>Move Quality:</label>
+        <div className="star-rating">{renderStars('quality', quality)}</div>
       </div>
       <div className="rating-item">
-        <label>Correctness:</label>
-        {renderStarRating(correctness, setCorrectness, 'correctness')}
+        <label>Thoughts Correctness:</label>
+        <div className="star-rating">{renderStars('correctness', correctness)}</div>
       </div>
       <div className="rating-item">
-        <label>Relevance:</label>
-        {renderStarRating(relevance, setRelevance, 'relevance')}
+        <label>Thoughts Relevance:</label>
+        <div className="star-rating">{renderStars('relevance', relevance)}</div>
       </div>
       <div className="rating-item">
-        <label>Salience:</label>
-        {renderStarRating(salience, setSalience, 'salience')}
+        <label>Thoughts Salience:</label>
+        <div className="star-rating">{renderStars('salience', salience)}</div>
       </div>
       <div className="rating-item">
-        <label>Review:</label>
-        <textarea value={review} onChange={(e) => setReview(e.target.value)} />
+        <label htmlFor="review">Review:</label>
+        <textarea
+          id="review"
+          value={review}
+          onChange={handleReviewChange}
+        ></textarea>
       </div>
-      <button type="submit">Submit</button>
+      <button type="submit" disabled={!isRatingFilled}>
+        Submit
+      </button>
     </form>
   );
 };
