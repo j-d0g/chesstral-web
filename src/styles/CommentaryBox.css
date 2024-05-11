@@ -16,3 +16,13 @@
 .commentary-message strong {
   color: #4caf50;
 }
+
+/* CommentaryBox.css */
+.commentary-message {
+  /* ... */
+  cursor: pointer;
+}
+
+.commentary-message.hovered {
+  background-color: #444;
+}

@@ -1,6 +1,6 @@
 // Board.tsx
 import React from 'react';
-import useGameLogic from '../hooks/useGameLogic';
+import useChess from '../hooks/useChess';
 import Chessboard from 'chessboardjsx';
 import ControlPanel from './ControlPanel';
 import CommentaryBox from './CommentaryBox';
@@ -20,7 +20,8 @@ const Board: React.FC = () => {
     handleFenInput,
     handlePgnInput,
     handleMove,
-  } = useGameLogic();
+    handleRatingSubmit,
+  } = useChess();
 
   return (
     <div className="board-container">
@@ -59,7 +60,7 @@ const Board: React.FC = () => {
         <CommentaryBox
           commentaryBoxRef={commentaryBoxRef}
           commentaryHistory={commentaryHistory}
-          selectedEngine={selectedEngine}
+          onRatingSubmit={handleRatingSubmit}
         />
       </div>
     </div>

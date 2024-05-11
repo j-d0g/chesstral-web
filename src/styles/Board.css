@@ -37,3 +37,9 @@
   max-height: calc(100vw - 500px);
   overflow-y: scroll;
 }
+
+.engine-selector {
+  display: flex;
+  margin-top: 0px;
+  margin-right: auto;
+}

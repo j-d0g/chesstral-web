@@ -27,6 +27,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       <div className="engine-selector">
         <label htmlFor="engine-select">Select Engine: </label>
           <select id="engine-select" value={selectedEngine} onChange={handleEngineChange}>
+              <option value="You">You</option>
               <option value="open-mistral-7b">Open-Mistral-7B</option>
               <option value="open-mixtral-8x7b">Open-Mixtral-8x7B</option>
               <option value="open-mixtral-8x22b">Open-Mixtral-8x22B</option>
