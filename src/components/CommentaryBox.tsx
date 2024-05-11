@@ -69,6 +69,7 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
     };
 
     submitRating(ratingJSON);
+    onRatingSubmit(index);
     setExpandedMessageIndex(null);
   };
 
@@ -89,9 +90,9 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
             <div className="message-header">
               <strong>{message.engineName}:</strong>
               {message.reviewed && (
-                <span className="reviewed-message">
-                  <span className="tick"> ✓</span>
-                </span>
+                  <span className="reviewed-message">
+                <span className="tick"> ✓ </span>
+              </span>
               )}
             </div>
             <p>

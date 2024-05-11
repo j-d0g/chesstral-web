@@ -38,7 +38,6 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit }) => {
       default:
         break;
     }
-
   };
 
   const renderStars = (category: string, value: number) => {
@@ -73,6 +72,10 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit }) => {
         <div className="star-rating">{renderStars('quality', quality)}</div>
       </div>
       <div className="rating-item">
+        <label>Move Responsiveness:</label>
+        <div className="star-rating">{renderStars('quality', quality)}</div>
+      </div>
+      <div className="rating-item">
         <label>Thoughts Correctness:</label>
         <div className="star-rating">{renderStars('correctness', correctness)}</div>
       </div>
@@ -90,6 +93,12 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit }) => {
           id="review"
           value={review}
           onChange={handleReviewChange}
+            placeholder="
+            MOVE QUALITY - How good/human-like the move was for a beginner.
+            MOVE RESPONSIVENESS - How attentively the move appears to respond to the current board-state / previous move(s).
+            THOUGHTS CORRECTNESS - How factually accurate the comments were.
+            THOUGHTS RELEVANCE - How relevant the comments were to the move made.
+            THOUGHTS SALIENCE - How useful were the comments, i.e did they place attention on the right things?"
         ></textarea>
       </div>
       <button type="submit" disabled={!isRatingFilled}>

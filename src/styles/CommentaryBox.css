@@ -16,9 +16,12 @@
 }
 
 .commentary-message strong {
-  color: #4caf50;
 }
 
 .commentary-message.hovered {
   background-color: #444;
+}
+
+.tick {
+  color: #ffc107;
 }
