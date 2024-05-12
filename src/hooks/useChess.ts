@@ -3,7 +3,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {Chess, Move as ChessMove} from 'chess.js';
 import {CommentaryMessage} from '../types/CommentaryMessage';
 import {BoardMove} from "../types/BoardMove";
-import {fetchComputerMove} from "../server/ChessAPIServer";
+import {fetchComputerMove, fetchStockfishScore} from "../server/ChessAPIServer";
 
 function useChess() {
   const [board, setBoard] = useState<Chess>(new Chess());
@@ -11,6 +11,7 @@ function useChess() {
   const [commentaryHistory, setCommentaryHistory] = useState<CommentaryMessage[]>([]);
   const [contextOn, setContextOn] = useState<boolean>(false);
   const [conversation, setConversation] = useState<[]>([]);
+  const [evalScore, setEvalScore] = useState<number>(0);
   const commentaryHistoryRef = useRef<HTMLDivElement>(null);
 
   // Hooks
@@ -43,7 +44,9 @@ function useChess() {
     }
   };
 
-  const handleUpdateBoard = (newBoard: Chess) => {
+  const handleUpdateBoard = async (newBoard: Chess) => {
+    const data = await fetchStockfishScore(newBoard.fen());
+    setEvalScore(data.evaluation);
     setBoard(newBoard);
     if (newBoard.turn() === 'b') {
       handleComputerMove(newBoard);
@@ -134,8 +137,8 @@ function useChess() {
   };
 
   return {
-    board, selectedEngine: selectedEngine, commentaryHistory, conversation, contextOn, commentaryBoxRef: commentaryHistoryRef,
-    handlePgnInput, handleFenInput, setSelectedEngine: setSelectedEngine, toggleContext, resetBoard: resetGame, handleMove, handleUpdateBoard, handleRatingSubmit
+    board, selectedEngine: selectedEngine, commentaryHistory, conversation, contextOn, commentaryBoxRef: commentaryHistoryRef, evalScore,
+    handlePgnInput, handleFenInput, setSelectedEngine: setSelectedEngine, toggleContext, resetBoard: resetGame, handleMove, handleUpdateBoard, handleRatingSubmit,
   };
 }
 

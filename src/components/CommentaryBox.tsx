@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import '../styles/CommentaryBox.css';
 import { CommentaryMessage } from '../types/CommentaryMessage';
 import RatingForm from './RatingForm';
-import {submitRating} from "../server/ChessAPIServer";
+import {saveRating} from "../server/ChessAPIServer";
 import {RatingJSON} from "../types/RatingJSON";
 
 type CommentaryBoxProps = {
@@ -68,7 +68,7 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
       review: rating.review,
     };
 
-    submitRating(ratingJSON);
+    saveRating(ratingJSON);
     onRatingSubmit(index);
     setExpandedMessageIndex(null);
   };
