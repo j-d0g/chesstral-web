@@ -16,6 +16,7 @@ const Board: React.FC = () => {
     commentaryBoxRef,
     commentaryHistory,
     evalScore,
+    uuid,
     setSelectedEngine,
     toggleContext,
     resetBoard,
@@ -24,8 +25,6 @@ const Board: React.FC = () => {
     handleMove,
     handleRatingSubmit,
   } = useChess();
-
-  console.log(evalScore)
 
   return (
     <div className="board-container">
@@ -65,7 +64,8 @@ const Board: React.FC = () => {
         <CommentaryBox
             commentaryBoxRef={commentaryBoxRef}
             commentaryHistory={commentaryHistory}
-          onRatingSubmit={handleRatingSubmit}
+            onRatingSubmit={handleRatingSubmit}
+            uuid={uuid}
         />
       </div>
     </div>

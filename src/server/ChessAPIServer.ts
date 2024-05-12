@@ -3,6 +3,7 @@ import { Chess } from 'chess.js';
 import {RatingJSON} from "../types/RatingJSON";
 
 interface MoveResponse {
+  uuid: string;
   prompt: {
     completion: {
       move: string;

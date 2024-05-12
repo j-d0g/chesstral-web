@@ -12,6 +12,7 @@ function useChess() {
   const [contextOn, setContextOn] = useState<boolean>(false);
   const [conversation, setConversation] = useState<[]>([]);
   const [evalScore, setEvalScore] = useState<number>(0);
+  const [uuid, setUUID] = useState<string>('');
   const commentaryHistoryRef = useRef<HTMLDivElement>(null);
 
   // Hooks
@@ -39,6 +40,7 @@ function useChess() {
     const data = await fetchComputerMove(currentBoard, selectedEngine, contextOn, conversation);
     if (data) {
       const { move, thoughts } = data.prompt.completion;
+      setUUID(data.uuid)
       setConversation(data.prompt.context);
       handleMove(move, thoughts, selectedEngine);
     }
@@ -137,7 +139,7 @@ function useChess() {
   };
 
   return {
-    board, selectedEngine: selectedEngine, commentaryHistory, conversation, contextOn, commentaryBoxRef: commentaryHistoryRef, evalScore,
+    board, selectedEngine: selectedEngine, commentaryHistory, conversation, contextOn, commentaryBoxRef: commentaryHistoryRef, evalScore, uuid,
     handlePgnInput, handleFenInput, setSelectedEngine: setSelectedEngine, toggleContext, resetBoard: resetGame, handleMove, handleUpdateBoard, handleRatingSubmit,
   };
 }

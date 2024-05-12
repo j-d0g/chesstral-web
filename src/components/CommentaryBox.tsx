@@ -9,9 +9,10 @@ type CommentaryBoxProps = {
   commentaryHistory: CommentaryMessage[];
   commentaryBoxRef: React.RefObject<HTMLDivElement>;
   onRatingSubmit: (index: number) => void;
+  uuid: string;
 };
 
-const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commentaryBoxRef, onRatingSubmit }) => {
+const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commentaryBoxRef, onRatingSubmit, uuid }) => {
   const [expandedMessageIndex, setExpandedMessageIndex] = useState<number | null>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [hoveredMessageIndex, setHoveredMessageIndex] = useState<number | null>(null);
@@ -53,9 +54,10 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
   };
 
 
-  const handleRatingSubmit = (rating: { quality: number; correctness: number; relevance: number; salience: number; review: string }, index: number) => {
+  const handleRatingSubmit = (uuid: string, rating: {quality: number; correctness: number; relevance: number; salience: number; review: string }, index: number) => {
     const message = commentaryHistory[index];
     const ratingJSON: RatingJSON = {
+      uuid: uuid,
       engineName: message.engineName,
       fen: message.fen,
       move: message.move,
@@ -102,7 +104,7 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
           </div>
           {index === expandedMessageIndex && (
             <div className="rating-form-container">
-              <RatingForm onSubmit={(rating) => handleRatingSubmit(rating, index)} />
+              <RatingForm onSubmit={(rating) => handleRatingSubmit(uuid, rating, index)} />
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 export interface RatingJSON {
   // game info
+  uuid: string;
   engineName: string;
   fen: string;
   move: string;
