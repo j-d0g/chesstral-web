@@ -1,27 +1,123 @@
 /* CommentaryBox.css */
 
+.commentary-box {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+
 .commentary-box h2 {
-  text-align: center;
-  margin-top: 0px;
-  margin-bottom: 15px;
+  display: none; /* Hidden since tab title shows this */
 }
 
 .commentary-message {
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: #3c3c3c;
-  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.commentary-message strong {
+.commentary-message:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.commentary-message.expanded {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .commentary-message.hovered {
-  background-color: #444;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.message-content {
+  color: #fff;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.message-header strong {
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.reviewed-message {
+  display: flex;
+  align-items: center;
 }
 
 .tick {
-  color: #ffc107;
+  color: #4caf50;
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.commentary-message p {
+  margin: 4px 0;
+  line-height: 1.3;
+  font-size: 0.9em;
+}
+
+.commentary-message p:first-of-type {
+  font-weight: 600;
+  color: #e3f2fd;
+  font-family: 'Courier New', monospace;
+}
+
+.commentary-message p:last-of-type {
+  color: #f0f0f0;
+  font-style: italic;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.rating-form-container {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Empty state */
+.commentary-box:empty::after {
+  content: "AI thoughts will appear here as the game progresses...";
+  display: block;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  padding: 40px 20px;
+}
+
+/* Scrollbar styling for commentary box */
+.commentary-box::-webkit-scrollbar {
+  width: 4px;
+}
+
+.commentary-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.commentary-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.commentary-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
