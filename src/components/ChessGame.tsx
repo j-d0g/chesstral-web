@@ -4,32 +4,41 @@ import { useGameStore } from '../store/gameStore'
 import EngineSelector from './EngineSelector'
 import GameControls from './GameControls'
 import MoveHistory from './MoveHistory'
-import EvaluationBar from './EvaluationBar'
+import EnhancedAnalysisPanel from './EnhancedAnalysisPanel'
 import PositionInput from './PositionInput'
 import CommentaryBox from './CommentaryBox'
 import TemperatureControl from './TemperatureControl'
 import MoveNavigation from './MoveNavigation'
 import GameSetup from './GameSetup'
 import LandingPage from './LandingPage'
+import Timer from './Timer'
+import EvaluationBar from './EvaluationBar'
 
 const ChessGame: React.FC = () => {
   const {
     gameState,
+    currentMoveIndex,
     gameMode,
     gameStatus,
+    evaluation,
+    isThinking,
     selectedEngine,
     playerSide,
-    isThinking,
-    evaluation,
+    temperature,
+    timeFormat,
     commentaryHistory,
+    goToPreviousMove,
+    goToNextMove,
     makeHumanMove,
-    resetGame,
     setEngine,
     setPlayerSide,
+    setTemperature,
     switchSides,
+    resetGame,
+    resignGame,
+    goToMove,
     loadPosition,
-    markCommentaryReviewed,
-    resignGame
+    markCommentaryReviewed
   } = useGameStore()
 
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
@@ -57,6 +66,27 @@ const ChessGame: React.FC = () => {
       setActiveTab('moves')
     }
   }, [gameMode, activeTab, availableTabs])
+
+  // Global keyboard navigation (works on any tab)
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Only handle if not typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        goToPreviousMove()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        goToNextMove()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyPress)
+    return () => document.removeEventListener('keydown', handleKeyPress)
+  }, [goToPreviousMove, goToNextMove])
 
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string) => {
@@ -150,7 +180,7 @@ const ChessGame: React.FC = () => {
         <div className="game-info">
           <div className="players">
             <div className={`player ${playerSide === 'white' ? 'active' : ''}`}>
-              <span className="player-icon">🔵</span>
+              <span className="player-icon">⚪</span>
               {playerSide === 'white' && <span>You</span>}
               {gameState.turn === 'w' && <span className="turn-indicator">●</span>}
             </div>
@@ -172,83 +202,74 @@ const ChessGame: React.FC = () => {
         <div className="top-controls">
           {/* Only show engine selector in research mode */}
           {!isCompetitive && (
-            <EngineSelector 
-              selectedEngine={selectedEngine}
-              onEngineChange={setEngine}
-            />
+        <EngineSelector 
+          selectedEngine={selectedEngine}
+          onEngineChange={setEngine}
+        />
           )}
           
           <div className="side-toggle">
             {gameMode === 'research' ? (
-              <button 
+            <button 
                 className="switch-sides-btn"
                 onClick={switchSides}
                 disabled={isThinking}
                 title="Switch sides with the AI"
-              >
+            >
                 🔄 Switch Sides
-              </button>
+            </button>
             ) : (
-              // In competitive mode, sides are locked after game starts
-              <div className="competitive-sides">
-                <span className={`side-indicator ${playerSide === 'white' ? 'active' : ''}`}>
-                  🔵 {playerSide === 'white' ? 'You' : selectedEngine.type}
-                </span>
-                <span className="vs">vs</span>
-                <span className={`side-indicator ${playerSide === 'black' ? 'active' : ''}`}>
-                  ⚫ {playerSide === 'black' ? 'You' : selectedEngine.type}
-                </span>
+              // In competitive mode, show cleaner display without duplication
+              <div className="competitive-info">
+                <span className="match-type">Competitive Match</span>
               </div>
             )}
           </div>
         
-          <GameControls
-            onNewGame={resetGame}
-            onFlipBoard={handleFlipBoard}
-            isThinking={isThinking}
+        <GameControls
+          onNewGame={resetGame}
+          onFlipBoard={handleFlipBoard}
+          isThinking={isThinking}
             showResign={isCompetitive}
             onResign={handleResign}
-          />
+        />
         </div>
       </div>
 
       {/* Main Game Area */}
       <div className="game-main">
         {/* Board Section */}
-        <div className="board-section">
+        <div className="game-board-section">
           <div className="board-container">
           <Chessboard
             position={gameState.fen}
             onPieceDrop={onDrop}
             boardOrientation={boardOrientation}
             arePiecesDraggable={!isThinking && !gameState.isGameOver && isPlayersTurn}
+              boardWidth={500}
             customBoardStyle={{
-                borderRadius: '8px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                borderRadius: '4px',
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
             }}
             customDarkSquareStyle={{ backgroundColor: '#779952' }}
             customLightSquareStyle={{ backgroundColor: '#edeed1' }}
               customDropSquareStyle={{
                 boxShadow: 'inset 0 0 1px 6px rgba(255,255,255,0.75)'
               }}
-              boardWidth={500}
             />
-          </div>
 
-          {/* Game Status */}
-          <div className="game-status-bar">
-            {gameState.isGameOver ? (
-              <div className="game-over-status">
-                🏁 {gameState.result}
-              </div>
-            ) : (
-              <div className="current-status">
-                <span>Turn: <strong>{currentTurn}</strong></span>
-                <span>•</span>
-                <span>{isPlayersTurn ? "Your turn" : "AI thinking..."}</span>
-              </div>
+            {/* Timer - only show in competitive mode */}
+            {isCompetitive && (
+              <Timer timeFormat={timeFormat} />
             )}
           </div>
+          
+          {/* Evaluation Bar - show in research mode next to board */}
+          {!isCompetitive && (
+            <div className="evaluation-section">
+              <EvaluationBar evaluation={evaluation} />
+            </div>
+          )}
         </div>
 
         {/* Right Panel */}
@@ -256,16 +277,16 @@ const ChessGame: React.FC = () => {
           {/* Tab Navigation */}
           <div className="tab-nav">
             {availableTabs.map(tab => (
-              <button 
+            <button 
                 key={tab}
                 className={`tab ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab)}
-              >
+            >
                 {tab === 'moves' && 'Moves'}
                 {tab === 'analysis' && 'Analysis'}
                 {tab === 'commentary' && 'AI Thoughts'}
                 {tab === 'settings' && 'Settings'}
-              </button>
+            </button>
             ))}
           </div>
 
@@ -277,20 +298,16 @@ const ChessGame: React.FC = () => {
                 <MoveHistory moves={gameState.pgn} />
                 {/* Only show position input in research mode */}
                 {!isCompetitive && (
-                  <div className="position-input-section">
-                    <PositionInput onLoadPosition={loadPosition} />
-                  </div>
+                <div className="position-input-section">
+                  <PositionInput onLoadPosition={loadPosition} />
+                </div>
                 )}
               </div>
             )}
 
             {activeTab === 'analysis' && !isCompetitive && (
               <div className="analysis-tab">
-                <EvaluationBar evaluation={evaluation} />
-                <div className="analysis-info">
-                  <h4>Position Analysis</h4>
-                  <p>Engine evaluation and best moves will appear here.</p>
-                </div>
+                <EnhancedAnalysisPanel />
               </div>
             )}
 
@@ -343,9 +360,9 @@ const ChessGame: React.FC = () => {
               </div>
             </div>
             <div className="game-over-actions">
-              <button className="new-game-button" onClick={resetGame}>
-                New Game
-              </button>
+            <button className="new-game-button" onClick={resetGame}>
+              New Game
+            </button>
               {isCompetitive && (
                 <button className="rematch-button" onClick={() => {
                   // Switch sides and start new game

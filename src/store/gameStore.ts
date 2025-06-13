@@ -28,6 +28,7 @@ interface GameStore {
   evaluation: number | null
   commentaryHistory: CommentaryMessage[]
   temperature: number
+  timeFormat: 'blitz' | 'rapid' | 'classical' | 'unlimited'
   
   // Move navigation state
   currentMoveIndex: number  // -1 = start position, 0 = after first move, etc.
@@ -43,6 +44,7 @@ interface GameStore {
   setEngine: (engine: EngineConfig) => void
   setPlayerSide: (side: 'white' | 'black') => void
   setTemperature: (temp: number) => void
+  setTimeFormat: (format: 'blitz' | 'rapid' | 'classical' | 'unlimited') => void
   loadPosition: (fen: string, pgn?: string[]) => void
   getAIMove: () => Promise<void>
   evaluatePosition: () => Promise<void>
@@ -79,6 +81,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   evaluation: null,
   commentaryHistory: [],
   temperature: 0.01, // Default to very low temperature for best performance
+  timeFormat: 'classical', // Default to classical time format
   
   // Move navigation state
   currentMoveIndex: -1,  // Start at beginning
@@ -137,7 +140,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })
 
       const newPgn = newGame.history()
-      
+
       set({
         game: newGame,
         gameState: {
@@ -252,7 +255,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const { playerSide, getAIMove } = get()
       const newGame = new Chess()
       
-      set({
+      set({ 
         gameStatus: 'active',
         game: newGame,
         gameState: {
@@ -332,6 +335,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ temperature: temp })
   },
 
+  setTimeFormat: (format: 'blitz' | 'rapid' | 'classical' | 'unlimited') => {
+    console.log('Setting time format:', format)
+    set({ timeFormat: format })
+  },
+
   loadPosition: (fen: string, pgn?: string[]) => {
     try {
       // Create a new game instance from the provided FEN
@@ -344,7 +352,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       const newPgn = newGame.history()
-      
+
       set({
         game: newGame,
         gameState: {

@@ -10,6 +10,7 @@ import { useGameStore } from '../store/gameStore'
 
 const MoveNavigation: React.FC = () => {
   const {
+    gameMode,
     currentMoveIndex,
     fullGamePgn,
     goToMove,
@@ -56,6 +57,7 @@ const MoveNavigation: React.FC = () => {
   const isAtEnd = currentMoveIndex === fullGamePgn.length - 1
   const totalMoves = fullGamePgn.length
   const canContinueFromHere = !isAtEnd && totalMoves > 0
+  const isCompetitive = gameMode === 'competitive'
 
   return (
     <div className="move-navigation">
@@ -114,7 +116,8 @@ const MoveNavigation: React.FC = () => {
         </div>
       )}
       
-      {canContinueFromHere && (
+      {/* Only show continue from here in research mode */}
+      {canContinueFromHere && !isCompetitive && (
         <div className="continue-from-here">
           <button 
             onClick={continueFromHere}

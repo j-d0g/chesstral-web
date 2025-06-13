@@ -1,8 +1,14 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ChessGame from './components/ChessGame'
+import { openingBook } from './services/openingBook'
 import './App.css'
 
 function App() {
+  useEffect(() => {
+    // Load opening book on app startup
+    openingBook.loadOpenings()
+  }, [])
+
   return (
     <div className="App">
       <header className="App-header">

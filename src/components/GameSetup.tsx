@@ -17,20 +17,21 @@ const GameSetup: React.FC = () => {
     gameMode,
     setEngine,
     setPlayerSide,
+    setTimeFormat,
     startGame,
   } = useGameStore()
 
   // Competitive mode specific state
   const [playerElo, setPlayerElo] = useState<string>('')
   const [eloType, setEloType] = useState<'fide' | 'chess.com' | 'lichess'>('lichess')
-  const [timeFormat, setTimeFormat] = useState<'blitz' | 'rapid' | 'classical' | 'unlimited'>('unlimited')
+  const [timeFormatLocal, setTimeFormatLocal] = useState<'blitz' | 'rapid' | 'classical' | 'unlimited'>('unlimited')
 
   const isNanoGPT = selectedEngine.type === 'nanogpt'
   const isCompetitive = gameMode === 'competitive'
 
   const handleStartGame = () => {
-    // In competitive mode, we could save the ELO and time format to the store
-    // For now, just start the game
+    // Save the time format to the store
+    setTimeFormat(timeFormatLocal)
     startGame()
   }
 
@@ -65,7 +66,7 @@ const GameSetup: React.FC = () => {
               className={`color-btn ${playerSide === 'white' ? 'active' : ''}`}
               onClick={() => setPlayerSide('white')}
             >
-              <span className="color-icon">🔵</span>
+              <span className="color-icon">⚪</span>
               <span>Play as White</span>
               <span className="color-desc">You move first</span>
             </button>
@@ -130,32 +131,32 @@ const GameSetup: React.FC = () => {
               <h3>⏱️ Time Format</h3>
               <div className="time-format-selector">
                 <button 
-                  className={`time-btn ${timeFormat === 'blitz' ? 'active' : ''}`}
-                  onClick={() => setTimeFormat('blitz')}
+                  className={`time-btn ${timeFormatLocal === 'blitz' ? 'active' : ''}`}
+                  onClick={() => setTimeFormatLocal('blitz')}
                 >
                   <span className="time-icon">⚡</span>
                   <span>Blitz</span>
                   <span className="time-desc">3+2 minutes</span>
                 </button>
                 <button 
-                  className={`time-btn ${timeFormat === 'rapid' ? 'active' : ''}`}
-                  onClick={() => setTimeFormat('rapid')}
+                  className={`time-btn ${timeFormatLocal === 'rapid' ? 'active' : ''}`}
+                  onClick={() => setTimeFormatLocal('rapid')}
                 >
                   <span className="time-icon">🏃</span>
                   <span>Rapid</span>
                   <span className="time-desc">10+5 minutes</span>
                 </button>
                 <button 
-                  className={`time-btn ${timeFormat === 'classical' ? 'active' : ''}`}
-                  onClick={() => setTimeFormat('classical')}
+                  className={`time-btn ${timeFormatLocal === 'classical' ? 'active' : ''}`}
+                  onClick={() => setTimeFormatLocal('classical')}
                 >
                   <span className="time-icon">🏛️</span>
                   <span>Classical</span>
                   <span className="time-desc">30+30 minutes</span>
                 </button>
                 <button 
-                  className={`time-btn ${timeFormat === 'unlimited' ? 'active' : ''}`}
-                  onClick={() => setTimeFormat('unlimited')}
+                  className={`time-btn ${timeFormatLocal === 'unlimited' ? 'active' : ''}`}
+                  onClick={() => setTimeFormatLocal('unlimited')}
                 >
                   <span className="time-icon">♾️</span>
                   <span>Unlimited</span>
