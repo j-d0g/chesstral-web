@@ -1,3 +1,34 @@
+/**
+ * ChessGame.tsx - Main Chess Game Component
+ * 
+ * PURPOSE: Central game interface that orchestrates the chess playing experience
+ * 
+ * RESPONSIBILITIES:
+ * - Renders the chess board with drag-and-drop functionality
+ * - Manages game controls (new game, flip board, engine selection)
+ * - Handles player moves and triggers AI responses
+ * - Displays game status, move history, and AI commentary
+ * - Provides tabbed interface for different game aspects
+ * 
+ * KEY FEATURES:
+ * - Real-time board updates with visual feedback
+ * - Engine constraints (e.g., NanoGPT forces player to black)
+ * - Responsive layout with board and analysis panels
+ * - Commentary system with AI move explanations
+ * 
+ * STATE MANAGEMENT: Uses Zustand store (gameStore) for all game state
+ * 
+ * CHILD COMPONENTS:
+ * - Chessboard: react-chessboard for piece interaction
+ * - EngineSelector: AI engine and model selection
+ * - GameControls: New game, flip board controls
+ * - MoveHistory: List of moves played
+ * - CommentaryBox: AI thoughts and move analysis
+ * - EvaluationBar: Position evaluation display
+ * - PositionInput: FEN/PGN position loading
+ * - TemperatureControl: AI creativity settings
+ */
+
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { useGameStore } from '../store/gameStore'
@@ -8,6 +39,7 @@ import EvaluationBar from './EvaluationBar'
 import PositionInput from './PositionInput'
 import CommentaryBox from './CommentaryBox'
 import TemperatureControl from './TemperatureControl'
+import MoveNavigation from './MoveNavigation'
 
 const ChessGame: React.FC = () => {
   const {
@@ -214,6 +246,7 @@ const ChessGame: React.FC = () => {
           <div className="tab-content">
             {activeTab === 'moves' && (
               <div className="moves-tab">
+                <MoveNavigation />
                 <MoveHistory moves={gameState.pgn} />
                 <div className="position-input-section">
                   <PositionInput onLoadPosition={loadPosition} />

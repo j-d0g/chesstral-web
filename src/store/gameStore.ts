@@ -27,6 +27,10 @@ interface GameStore {
   commentaryHistory: CommentaryMessage[]
   temperature: number
   
+  // Move navigation state
+  currentMoveIndex: number  // -1 = start position, 0 = after first move, etc.
+  fullGamePgn: string[]     // Complete game PGN (never changes during navigation)
+  
   // Actions
   makeHumanMove: (move: any) => Promise<boolean>
   resetGame: () => void
@@ -38,6 +42,14 @@ interface GameStore {
   evaluatePosition: () => Promise<void>
   addCommentaryMessage: (message: CommentaryMessage) => void
   markCommentaryReviewed: (index: number) => void
+  
+  // Move navigation actions
+  goToMove: (moveIndex: number) => void
+  goToNextMove: () => void
+  goToPreviousMove: () => void
+  goToStart: () => void
+  goToEnd: () => void
+  continueFromHere: () => void
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -59,10 +71,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   evaluation: null,
   commentaryHistory: [],
   temperature: 0.01, // Default to very low temperature for best performance
+  
+  // Move navigation state
+  currentMoveIndex: -1,  // Start at beginning
+  fullGamePgn: [],
 
   // Actions
   makeHumanMove: async (move: any) => {
-    const { game, playerSide, getAIMove, evaluatePosition, addCommentaryMessage } = get()
+    const { game, playerSide, getAIMove, evaluatePosition, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+
+    // Only allow moves if we're at the end of the game (live play mode)
+    if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
+      console.log("Cannot make moves while reviewing previous positions")
+      return false
+    }
 
     // Create a TRUE copy of the game, including history, by using PGN.
     const newGame = new Chess()
@@ -100,15 +122,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         reviewed: false,
       })
 
+      const newPgn = newGame.history()
+      
       set({
         game: newGame,
         gameState: {
           fen: newGame.fen(),
-          pgn: newGame.history(),
+          pgn: newPgn,
           turn: newGame.turn(),
           isGameOver: newGame.isGameOver(),
           result: newGame.isGameOver() ? getGameResult(newGame) : null,
         },
+        fullGamePgn: newPgn,
+        currentMoveIndex: newPgn.length - 1,
       })
 
       if (!newGame.isGameOver()) {
@@ -142,6 +168,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isThinking: false,
       evaluation: null,
       commentaryHistory: [],
+      currentMoveIndex: -1,
+      fullGamePgn: [],
     })
     
     // If player is black, AI should make the first move
@@ -205,17 +233,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
         newGame.loadPgn(pgn.join(' '))
       }
 
+      const newPgn = newGame.history()
+      
       set({
         game: newGame,
         gameState: {
           fen: newGame.fen(),
-          pgn: newGame.history(),
+          pgn: newPgn,
           turn: newGame.turn(),
           isGameOver: newGame.isGameOver(),
           result: newGame.isGameOver() ? getGameResult(newGame) : null,
         },
         commentaryHistory: [],
         evaluation: null,
+        fullGamePgn: newPgn,
+        currentMoveIndex: newPgn.length - 1,
       })
       
       console.log(`Position loaded: ${newGame.history().length} moves, FEN: ${fen.substring(0, 50)}...`)
@@ -229,7 +261,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   getAIMove: async () => {
-    const { game, selectedEngine, temperature, addCommentaryMessage } = get()
+    const { game, selectedEngine, temperature, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+    
+    // Only allow AI moves if we're at the end of the game (live play mode)
+    if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
+      console.log("Cannot get AI move while reviewing previous positions")
+      return
+    }
+    
     if (game.isGameOver()) return
 
     set({ isThinking: true })
@@ -267,15 +306,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
           reviewed: false,
         })
         
+        const newPgn = newGame.history()
+        
         set({
           game: newGame,
           gameState: {
             fen: newGame.fen(),
-            pgn: newGame.history(),
+            pgn: newPgn,
             turn: newGame.turn(),
             isGameOver: newGame.isGameOver(),
             result: newGame.isGameOver() ? getGameResult(newGame) : null,
           },
+          fullGamePgn: newPgn,
+          currentMoveIndex: newPgn.length - 1,
         })
       } else {
         throw new Error(`Invalid move from AI: ${response.move}`)
@@ -319,6 +362,103 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       return { commentaryHistory: newHistory }
     })
+  },
+
+  // Move navigation actions
+  goToMove: (moveIndex: number) => {
+    const { fullGamePgn } = get()
+    
+    // Clamp moveIndex to valid range
+    const clampedIndex = Math.max(-1, Math.min(moveIndex, fullGamePgn.length - 1))
+    
+    try {
+      const newGame = new Chess()
+      
+      if (clampedIndex >= 0) {
+        // Play moves up to the specified index
+        const movesToPlay = fullGamePgn.slice(0, clampedIndex + 1)
+        for (const move of movesToPlay) {
+          newGame.move(move)
+        }
+      }
+      
+      set({
+        game: newGame,
+        gameState: {
+          fen: newGame.fen(),
+          pgn: newGame.history(),
+          turn: newGame.turn(),
+          isGameOver: newGame.isGameOver(),
+          result: newGame.isGameOver() ? getGameResult(newGame) : null,
+        },
+        currentMoveIndex: clampedIndex,
+      })
+      
+      get().evaluatePosition()
+    } catch (error) {
+      console.error('Error navigating to move:', error)
+    }
+  },
+
+  goToNextMove: () => {
+    const { currentMoveIndex, fullGamePgn } = get()
+    if (currentMoveIndex < fullGamePgn.length - 1) {
+      get().goToMove(currentMoveIndex + 1)
+    }
+  },
+
+  goToPreviousMove: () => {
+    const { currentMoveIndex } = get()
+    if (currentMoveIndex > -1) {
+      get().goToMove(currentMoveIndex - 1)
+    }
+  },
+
+  goToStart: () => {
+    get().goToMove(-1)
+  },
+
+  goToEnd: () => {
+    const { fullGamePgn } = get()
+    get().goToMove(fullGamePgn.length - 1)
+  },
+
+  continueFromHere: () => {
+    const { currentMoveIndex, fullGamePgn, game, playerSide, getAIMove } = get()
+    
+    // If already at the end, no need to continue
+    if (currentMoveIndex === fullGamePgn.length - 1) {
+      return
+    }
+    
+    // Truncate the game history at the current position
+    const newPgn = currentMoveIndex >= 0 ? fullGamePgn.slice(0, currentMoveIndex + 1) : []
+    
+    // Update the full game PGN to the truncated version
+    set({
+      fullGamePgn: newPgn,
+      currentMoveIndex: newPgn.length - 1,
+      gameState: {
+        fen: game.fen(),
+        pgn: game.history(),
+        turn: game.turn(),
+        isGameOver: game.isGameOver(),
+        result: game.isGameOver() ? getGameResult(game) : null,
+      },
+    })
+    
+    console.log(`Continuing from move ${currentMoveIndex + 1}. Game truncated to ${newPgn.length} moves.`)
+    
+    // If it's the AI's turn and the game isn't over, get AI move
+    const isPlayersTurn = 
+      (game.turn() === 'w' && playerSide === 'white') ||
+      (game.turn() === 'b' && playerSide === 'black')
+    
+    if (!game.isGameOver() && !isPlayersTurn) {
+      setTimeout(() => {
+        getAIMove()
+      }, 500)
+    }
   },
 }))
 

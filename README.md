@@ -8,6 +8,51 @@ This directory contains the React-based frontend for the ChessGPT application, b
 -   **Real-time Engine Communication:** Communicates with the backend API to get moves from different chess engines (NanoGPT, Stockfish, etc.).
 -   **Dynamic UI:** Includes components for move history, game controls, engine selection, and detailed AI analysis.
 
+## 🚀 Getting Started
+
+### Quick Start (Recommended)
+From the project root, use the provided script to start both frontend and backend:
+
+```bash
+cd chessgpt_projects
+bash start_both.sh
+```
+
+This will start:
+- Backend API on `http://localhost:8000`
+- Frontend on `http://localhost:3000`
+
+### Manual Start
+If you prefer to start the frontend separately:
+
+```bash
+cd chessgpt_projects/web
+npm install
+npm run dev
+```
+
+The application will be available at `http://localhost:3000`.
+
+## 🔧 Troubleshooting
+
+### "Address already in use" Error
+If you see this error, it means a server is already running on the required port:
+
+```bash
+# Kill any existing processes
+pkill -f "uvicorn"
+pkill -f "vite"
+
+# Or kill specific ports
+lsof -ti:8000 | xargs kill -9  # Backend
+lsof -ti:3000 | xargs kill -9  # Frontend
+```
+
+### Port Configuration
+- **Frontend**: Runs on port 3000 (configured in `vite.config.ts`)
+- **Backend**: Runs on port 8000
+- **API Proxy**: Frontend automatically proxies `/api/*` requests to the backend
+
 ## State Management with Zustand
 
 The application's state is managed by **Zustand**, a small, fast, and scalable state-management solution.
@@ -48,4 +93,4 @@ Installs the necessary dependencies.
 
 ### `npm run dev`
 
-Runs the app in development mode. Open [http://localhost:5173](http://localhost:5173) to view it in the browser. The page will reload if you make edits.
+Runs the app in development mode. Open [http://localhost:3000](http://localhost:3000) to view it in the browser. The page will reload if you make edits.
