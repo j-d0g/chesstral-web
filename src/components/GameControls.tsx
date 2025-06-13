@@ -4,12 +4,16 @@ interface GameControlsProps {
   onNewGame: () => void
   onFlipBoard: () => void
   isThinking: boolean
+  showResign?: boolean
+  onResign?: () => void
 }
 
 const GameControls: React.FC<GameControlsProps> = ({
   onNewGame,
   onFlipBoard,
   isThinking,
+  showResign = false,
+  onResign,
 }) => {
   return (
     <div className="game-controls">
@@ -31,6 +35,16 @@ const GameControls: React.FC<GameControlsProps> = ({
         >
           🔄 Flip Board
         </button>
+
+        {showResign && onResign && (
+          <button 
+            onClick={onResign}
+            disabled={isThinking}
+            className="control-button resign"
+          >
+            🏳️ Resign
+          </button>
+        )}
       </div>
     </div>
   )

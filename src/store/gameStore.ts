@@ -20,6 +20,8 @@ interface GameStore {
   // State
   game: Chess
   gameState: GameState
+  gameMode: 'landing' | 'competitive' | 'research'
+  gameStatus: 'setup' | 'active' | 'finished'
   selectedEngine: EngineConfig
   playerSide: 'white' | 'black'
   isThinking: boolean
@@ -33,7 +35,11 @@ interface GameStore {
   
   // Actions
   makeHumanMove: (move: any) => Promise<boolean>
+  startGame: () => void
   resetGame: () => void
+  resignGame: () => void
+  setGameMode: (mode: 'landing' | 'competitive' | 'research') => void
+  switchSides: () => void
   setEngine: (engine: EngineConfig) => void
   setPlayerSide: (side: 'white' | 'black') => void
   setTemperature: (temp: number) => void
@@ -62,11 +68,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     isGameOver: false,
     result: null,
   },
+  gameMode: 'landing', // Start at landing page
+  gameStatus: 'setup', // Start in setup mode
   selectedEngine: {
-    type: 'openai',
-    model: 'o1',
+    type: 'nanogpt',
+    model: 'small-8',
   },
-  playerSide: 'white',
+  playerSide: 'black', // Default to black so NanoGPT plays white (its preferred color)
   isThinking: false,
   evaluation: null,
   commentaryHistory: [],
@@ -78,7 +86,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Actions
   makeHumanMove: async (move: any) => {
-    const { game, playerSide, getAIMove, evaluatePosition, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+    const { game, gameStatus, playerSide, getAIMove, evaluatePosition, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+
+    // Only allow moves if game is active
+    if (gameStatus !== 'active') {
+      console.log("Cannot make moves - game is not active")
+      return false
+    }
 
     // Only allow moves if we're at the end of the game (live play mode)
     if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
@@ -139,6 +153,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       if (!newGame.isGameOver()) {
         await getAIMove()
+      } else {
+        // Game is over, set status to finished
+        set({ gameStatus: 'finished' })
       }
       
       await evaluatePosition()
@@ -151,10 +168,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  resetGame: () => {
-    console.log('Resetting game...')
-    const newGame = new Chess()
+  startGame: () => {
+    console.log('Starting new game...')
     const { playerSide, getAIMove } = get()
+    const newGame = new Chess()
     
     set({
       game: newGame,
@@ -165,6 +182,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isGameOver: false,
         result: null,
       },
+      gameStatus: 'active',
       isThinking: false,
       evaluation: null,
       commentaryHistory: [],
@@ -172,8 +190,118 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fullGamePgn: [],
     })
     
-    // If player is black, AI should make the first move
+    // If AI plays white (player is black), AI should make the first move
     if (playerSide === 'black') {
+      setTimeout(() => {
+        getAIMove()
+      }, 500)
+    }
+  },
+
+  resetGame: () => {
+    const { gameMode } = get()
+    console.log('Resetting game...')
+    const newGame = new Chess()
+    
+    if (gameMode === 'competitive') {
+      // Go back to setup for competitive mode
+      set({
+        game: newGame,
+        gameState: {
+          fen: newGame.fen(),
+          pgn: [],
+          turn: 'w',
+          isGameOver: false,
+          result: null,
+        },
+        gameStatus: 'setup',
+        isThinking: false,
+        evaluation: null,
+        commentaryHistory: [],
+        currentMoveIndex: -1,
+        fullGamePgn: [],
+      })
+    } else {
+      // Go back to landing page for other modes
+      set({
+        gameMode: 'landing',
+        game: newGame,
+        gameState: {
+          fen: newGame.fen(),
+          pgn: [],
+          turn: 'w',
+          isGameOver: false,
+          result: null,
+        },
+        gameStatus: 'setup',
+        isThinking: false,
+        evaluation: null,
+        commentaryHistory: [],
+        currentMoveIndex: -1,
+        fullGamePgn: [],
+      })
+    }
+  },
+
+  setGameMode: (mode: 'landing' | 'competitive' | 'research') => {
+    console.log('Setting game mode:', mode)
+    set({ gameMode: mode })
+    
+    // If entering research mode, start immediately in active state
+    if (mode === 'research') {
+      const { playerSide, getAIMove } = get()
+      const newGame = new Chess()
+      
+      set({
+        gameStatus: 'active',
+        game: newGame,
+        gameState: {
+          fen: newGame.fen(),
+          pgn: [],
+          turn: 'w',
+          isGameOver: false,
+          result: null,
+        },
+        isThinking: false,
+        evaluation: null,
+        commentaryHistory: [],
+        currentMoveIndex: -1,
+        fullGamePgn: [],
+      })
+      
+      // If AI plays white (player is black), AI should make the first move
+      if (playerSide === 'black') {
+        setTimeout(() => {
+          getAIMove()
+        }, 500)
+      }
+    }
+    // If entering competitive mode, go to setup
+    else if (mode === 'competitive') {
+      set({ gameStatus: 'setup' })
+    }
+  },
+
+  switchSides: () => {
+    const { playerSide, gameMode, game, getAIMove } = get()
+    
+    // Only allow in research mode
+    if (gameMode !== 'research') {
+      console.log('Side switching only available in research mode')
+      return
+    }
+    
+    const newSide = playerSide === 'white' ? 'black' : 'white'
+    console.log(`Switching sides from ${playerSide} to ${newSide}`)
+    
+    set({ playerSide: newSide })
+    
+    // If it's now the AI's turn and game isn't over, get AI move
+    const isNowAITurn = 
+      (game.turn() === 'w' && newSide === 'black') ||
+      (game.turn() === 'b' && newSide === 'white')
+    
+    if (!game.isGameOver() && isNowAITurn) {
       setTimeout(() => {
         getAIMove()
       }, 500)
@@ -182,25 +310,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setEngine: (engine: EngineConfig) => {
     console.log('Setting engine:', engine)
-    const { game, playerSide, getAIMove } = get()
-    
-    // If switching to NanoGPT and player is currently White, force them to Black
-    if (engine.type === 'nanogpt' && playerSide === 'white') {
-      console.log('NanoGPT selected - forcing player to Black side')
-      set({ 
-        selectedEngine: engine,
-        playerSide: 'black'
-      })
-      
-      // If it's the start of the game (White's turn), AI should make the first move
-      if (game.turn() === 'w') {
-        setTimeout(() => {
-          getAIMove()
-        }, 500)
-      }
-    } else {
-      set({ selectedEngine: engine })
-    }
+    set({ selectedEngine: engine })
   },
 
   setPlayerSide: (side: 'white' | 'black') => {
@@ -261,7 +371,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   getAIMove: async () => {
-    const { game, selectedEngine, temperature, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+    const { game, gameStatus, selectedEngine, temperature, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
+    
+    // Only allow AI moves if game is active
+    if (gameStatus !== 'active') {
+      console.log("Cannot get AI move - game is not active")
+      return
+    }
     
     // Only allow AI moves if we're at the end of the game (live play mode)
     if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
@@ -317,6 +433,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             isGameOver: newGame.isGameOver(),
             result: newGame.isGameOver() ? getGameResult(newGame) : null,
           },
+          gameStatus: newGame.isGameOver() ? 'finished' : 'active',
           fullGamePgn: newPgn,
           currentMoveIndex: newPgn.length - 1,
         })
@@ -459,6 +576,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
         getAIMove()
       }, 500)
     }
+  },
+
+  resignGame: () => {
+    const { playerSide, game } = get()
+    console.log('Player resigned')
+    
+    // Create a copy of the game and set it as finished with resignation result
+    const newGame = new Chess()
+    const pgn = game.pgn()
+    if (pgn) {
+      newGame.loadPgn(pgn)
+    }
+    
+    // Determine result based on who resigned
+    const result = playerSide === 'white' ? '0-1 (White resigned)' : '1-0 (Black resigned)'
+    
+    set({
+      game: newGame,
+      gameState: {
+        fen: newGame.fen(),
+        pgn: newGame.history(),
+        turn: newGame.turn(),
+        isGameOver: true,
+        result: result,
+      },
+      gameStatus: 'finished',
+      isThinking: false,
+    })
   },
 }))
 

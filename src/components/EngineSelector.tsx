@@ -8,11 +8,13 @@ interface EngineConfig {
 interface EngineSelectorProps {
   selectedEngine: EngineConfig;
   onEngineChange: (engine: EngineConfig) => void;
+  disabled?: boolean;
 }
 
 const EngineSelector: React.FC<EngineSelectorProps> = ({
   selectedEngine,
   onEngineChange,
+  disabled = false,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -84,6 +86,7 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
   });
 
   const handleEngineSelect = (engine: any) => {
+    if (disabled) return;
     onEngineChange({
       type: engine.type,
       model: engine.models[0]
@@ -92,6 +95,7 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
   };
 
   const handleModelSelect = (model: string) => {
+    if (disabled) return;
     console.log('Model selected:', model);
     console.log('Current selectedEngine:', selectedEngine);
     console.log('Current engine:', currentEngine);
@@ -103,21 +107,23 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
   };
 
   return (
-    <div className="engine-selector-compact" ref={containerRef}>
+    <div className={`engine-selector-compact ${disabled ? 'disabled' : ''}`} ref={containerRef}>
       {/* Engine Dropdown */}
       <div className="engine-dropdown">
         <button 
           className="engine-button"
           onClick={() => {
+            if (disabled) return;
             setShowDropdown(!showDropdown);
             setShowModelSelector(false);
           }}
+          disabled={disabled}
         >
           {currentEngine?.name || 'Select Engine'}
           <span className="dropdown-arrow">▼</span>
         </button>
         
-        {showDropdown && (
+        {showDropdown && !disabled && (
           <div className="engine-dropdown-menu">
             {engines.filter(e => e.enabled).map((engine) => (
               <button
@@ -146,15 +152,17 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
           <button 
             className="model-button"
             onClick={() => {
+              if (disabled) return;
               setShowModelSelector(!showModelSelector);
               setShowDropdown(false);
             }}
+            disabled={disabled}
           >
             {selectedEngine.model || currentEngine.models[0]}
             <span className="dropdown-arrow">▼</span>
           </button>
           
-          {showModelSelector && (
+          {showModelSelector && !disabled && (
             <div className="model-dropdown-menu">
               {currentEngine.models.map((model) => (
                 <button

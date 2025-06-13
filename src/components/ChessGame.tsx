@@ -1,34 +1,3 @@
-/**
- * ChessGame.tsx - Main Chess Game Component
- * 
- * PURPOSE: Central game interface that orchestrates the chess playing experience
- * 
- * RESPONSIBILITIES:
- * - Renders the chess board with drag-and-drop functionality
- * - Manages game controls (new game, flip board, engine selection)
- * - Handles player moves and triggers AI responses
- * - Displays game status, move history, and AI commentary
- * - Provides tabbed interface for different game aspects
- * 
- * KEY FEATURES:
- * - Real-time board updates with visual feedback
- * - Engine constraints (e.g., NanoGPT forces player to black)
- * - Responsive layout with board and analysis panels
- * - Commentary system with AI move explanations
- * 
- * STATE MANAGEMENT: Uses Zustand store (gameStore) for all game state
- * 
- * CHILD COMPONENTS:
- * - Chessboard: react-chessboard for piece interaction
- * - EngineSelector: AI engine and model selection
- * - GameControls: New game, flip board controls
- * - MoveHistory: List of moves played
- * - CommentaryBox: AI thoughts and move analysis
- * - EvaluationBar: Position evaluation display
- * - PositionInput: FEN/PGN position loading
- * - TemperatureControl: AI creativity settings
- */
-
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { useGameStore } from '../store/gameStore'
@@ -40,10 +9,14 @@ import PositionInput from './PositionInput'
 import CommentaryBox from './CommentaryBox'
 import TemperatureControl from './TemperatureControl'
 import MoveNavigation from './MoveNavigation'
+import GameSetup from './GameSetup'
+import LandingPage from './LandingPage'
 
 const ChessGame: React.FC = () => {
   const {
     gameState,
+    gameMode,
+    gameStatus,
     selectedEngine,
     playerSide,
     isThinking,
@@ -53,8 +26,10 @@ const ChessGame: React.FC = () => {
     resetGame,
     setEngine,
     setPlayerSide,
+    switchSides,
     loadPosition,
-    markCommentaryReviewed
+    markCommentaryReviewed,
+    resignGame
   } = useGameStore()
 
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
@@ -63,17 +38,25 @@ const ChessGame: React.FC = () => {
 
   // Check if the selected engine constrains player side
   const isNanoGPT = selectedEngine.type === 'nanogpt'
+  const isCompetitive = gameMode === 'competitive'
 
-  // Effect to enforce side constraints when engine changes
+  // Remove the automatic side enforcement for NanoGPT - let users choose but show warning
   useEffect(() => {
-    if (isNanoGPT && playerSide === 'white') {
-      setPlayerSide('black')
-      setBoardOrientation('black')
-    } else if (isNanoGPT) {
-      // Even if already black, ensure board is oriented correctly
-      setBoardOrientation('black')
+    // Set board orientation to match player side
+    setBoardOrientation(playerSide)
+  }, [playerSide])
+
+  // Available tabs based on game mode
+  const availableTabs = isCompetitive 
+    ? ['moves'] as const
+    : ['moves', 'analysis', 'commentary', 'settings'] as const
+
+  // Ensure active tab is available in current mode
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab as any)) {
+      setActiveTab('moves')
     }
-  }, [selectedEngine.type, playerSide, setPlayerSide, isNanoGPT])
+  }, [gameMode, activeTab, availableTabs])
 
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string) => {
@@ -100,7 +83,6 @@ const ChessGame: React.FC = () => {
   )
 
   const handleSideChange = (side: 'white' | 'black') => {
-    if (isNanoGPT && side === 'white') return
     setPlayerSide(side)
     setBoardOrientation(side)
   }
@@ -113,12 +95,56 @@ const ChessGame: React.FC = () => {
     markCommentaryReviewed(index)
   }
 
+  const handleResign = () => {
+    if (window.confirm('Are you sure you want to resign this game?')) {
+      resignGame()
+    }
+  }
+
   const currentTurn = gameState.turn === 'w' ? 'White' : 'Black'
   const isPlayersTurn = (gameState.turn === 'w' && playerSide === 'white') || 
                        (gameState.turn === 'b' && playerSide === 'black')
 
+  // Show landing page
+  if (gameMode === 'landing') {
+    return <LandingPage />
+  }
+
+  // Show setup screen for competitive mode
+  if (gameMode === 'competitive' && gameStatus === 'setup') {
+    return <GameSetup />
+  }
+
+  // Show setup screen for research mode if needed
+  if (gameMode === 'research' && gameStatus === 'setup') {
+    return <GameSetup />
+  }
+
+  // Debug logging for blank page issue
+  console.log('ChessGame render state:', {
+    gameMode,
+    gameStatus,
+    isCompetitive,
+    gameState,
+    selectedEngine,
+    playerSide
+  })
+
+  // Fallback for unexpected states
+  if (!gameState || !selectedEngine) {
+    return (
+      <div className="chess-game-layout">
+        <div className="loading-state">
+          <h2>Loading game...</h2>
+          <p>Game Mode: {gameMode}</p>
+          <p>Game Status: {gameStatus}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="chess-game-layout">
+    <div className={`chess-game-layout ${isCompetitive ? 'competitive-mode' : 'research-mode'}`}>
       {/* Top Control Bar */}
       <div className="top-bar">
         <div className="game-info">
@@ -144,32 +170,45 @@ const ChessGame: React.FC = () => {
         </div>
 
         <div className="top-controls">
-        <EngineSelector 
-          selectedEngine={selectedEngine}
-          onEngineChange={setEngine}
-        />
+          {/* Only show engine selector in research mode */}
+          {!isCompetitive && (
+            <EngineSelector 
+              selectedEngine={selectedEngine}
+              onEngineChange={setEngine}
+            />
+          )}
           
           <div className="side-toggle">
-            <button 
-              className={`side-btn ${playerSide === 'white' ? 'active' : ''} ${isNanoGPT ? 'disabled' : ''}`}
-              onClick={() => handleSideChange('white')}
-              disabled={isNanoGPT}
-            >
-              🔵
-            </button>
-            <button 
-              className={`side-btn ${playerSide === 'black' ? 'active' : ''}`}
-              onClick={() => handleSideChange('black')}
-            >
-              ⚫
-            </button>
+            {gameMode === 'research' ? (
+              <button 
+                className="switch-sides-btn"
+                onClick={switchSides}
+                disabled={isThinking}
+                title="Switch sides with the AI"
+              >
+                🔄 Switch Sides
+              </button>
+            ) : (
+              // In competitive mode, sides are locked after game starts
+              <div className="competitive-sides">
+                <span className={`side-indicator ${playerSide === 'white' ? 'active' : ''}`}>
+                  🔵 {playerSide === 'white' ? 'You' : selectedEngine.type}
+                </span>
+                <span className="vs">vs</span>
+                <span className={`side-indicator ${playerSide === 'black' ? 'active' : ''}`}>
+                  ⚫ {playerSide === 'black' ? 'You' : selectedEngine.type}
+                </span>
+              </div>
+            )}
           </div>
         
-        <GameControls
-          onNewGame={resetGame}
-          onFlipBoard={handleFlipBoard}
-          isThinking={isThinking}
-        />
+          <GameControls
+            onNewGame={resetGame}
+            onFlipBoard={handleFlipBoard}
+            isThinking={isThinking}
+            showResign={isCompetitive}
+            onResign={handleResign}
+          />
         </div>
       </div>
 
@@ -216,30 +255,18 @@ const ChessGame: React.FC = () => {
         <div className="right-panel">
           {/* Tab Navigation */}
           <div className="tab-nav">
-            <button 
-              className={`tab ${activeTab === 'moves' ? 'active' : ''}`}
-              onClick={() => setActiveTab('moves')}
-            >
-              Moves
-            </button>
-            <button 
-              className={`tab ${activeTab === 'analysis' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analysis')}
-            >
-              Analysis
-            </button>
-            <button 
-              className={`tab ${activeTab === 'commentary' ? 'active' : ''}`}
-              onClick={() => setActiveTab('commentary')}
-            >
-              AI Thoughts
-            </button>
-            <button 
-              className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              Settings
-            </button>
+            {availableTabs.map(tab => (
+              <button 
+                key={tab}
+                className={`tab ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'moves' && 'Moves'}
+                {tab === 'analysis' && 'Analysis'}
+                {tab === 'commentary' && 'AI Thoughts'}
+                {tab === 'settings' && 'Settings'}
+              </button>
+            ))}
           </div>
 
           {/* Tab Content */}
@@ -248,13 +275,16 @@ const ChessGame: React.FC = () => {
               <div className="moves-tab">
                 <MoveNavigation />
                 <MoveHistory moves={gameState.pgn} />
-                <div className="position-input-section">
-                  <PositionInput onLoadPosition={loadPosition} />
-                </div>
+                {/* Only show position input in research mode */}
+                {!isCompetitive && (
+                  <div className="position-input-section">
+                    <PositionInput onLoadPosition={loadPosition} />
+                  </div>
+                )}
               </div>
             )}
 
-            {activeTab === 'analysis' && (
+            {activeTab === 'analysis' && !isCompetitive && (
               <div className="analysis-tab">
                 <EvaluationBar evaluation={evaluation} />
                 <div className="analysis-info">
@@ -264,7 +294,7 @@ const ChessGame: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'commentary' && (
+            {activeTab === 'commentary' && !isCompetitive && (
               <div className="commentary-tab">
                 <CommentaryBox
                   commentaryBoxRef={commentaryBoxRef}
@@ -275,7 +305,7 @@ const ChessGame: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'settings' && (
+            {activeTab === 'settings' && !isCompetitive && (
               <div className="settings-tab">
                 <TemperatureControl />
               </div>
@@ -284,10 +314,11 @@ const ChessGame: React.FC = () => {
         </div>
       </div>
 
-      {/* NanoGPT Warning */}
-      {isNanoGPT && (
+      {/* NanoGPT Performance Warning - Updated */}
+      {isNanoGPT && playerSide === 'white' && (
         <div className="nanogpt-notice">
-          ⚠️ NanoGPT models only play as White. You must play as Black.
+          ⚠️ <strong>Performance Notice:</strong> NanoGPT was trained to play as White and performs best in that role. 
+          When you play as White (forcing NanoGPT to play as Black), its performance will be significantly reduced.
         </div>
       )}
       
@@ -311,9 +342,20 @@ const ChessGame: React.FC = () => {
                 <span className="stat-value">{selectedEngine.type} {selectedEngine.model && `(${selectedEngine.model})`}</span>
               </div>
             </div>
-            <button className="new-game-button" onClick={resetGame}>
-              New Game
-            </button>
+            <div className="game-over-actions">
+              <button className="new-game-button" onClick={resetGame}>
+                New Game
+              </button>
+              {isCompetitive && (
+                <button className="rematch-button" onClick={() => {
+                  // Switch sides and start new game
+                  setPlayerSide(playerSide === 'white' ? 'black' : 'white')
+                  resetGame()
+                }}>
+                  🔄 Rematch (Switch Sides)
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
