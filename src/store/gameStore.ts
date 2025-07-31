@@ -74,7 +74,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameStatus: 'setup', // Start in setup mode
   selectedEngine: {
     type: 'nanogpt',
-    model: 'small-8',
+    model: 'lichess_8layers',
   },
   playerSide: 'black', // Default to black so NanoGPT plays white (its preferred color)
   isThinking: false,

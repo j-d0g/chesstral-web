@@ -65,6 +65,11 @@ class ApiService {
     const response = await this.client.get('/api/health')
     return response.data
   }
+
+  async post(endpoint: string, data: any): Promise<any> {
+    const response = await this.client.post(endpoint, data)
+    return response.data
+  }
 }
 
 export const apiService = new ApiService() 

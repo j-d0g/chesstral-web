@@ -39,7 +39,7 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
     { 
       type: 'nanogpt', 
       name: '🧠 NanoGPT', 
-      models: ['small-8', 'small-16', 'small-24', 'small-36', 'medium-12', 'medium-16', 'large-16'],
+      models: ['lichess_8layers', 'small-36', 'small-8', 'small-16', 'small-24', 'medium-12', 'medium-16', 'large-16'],
       enabled: true
     },
     { 

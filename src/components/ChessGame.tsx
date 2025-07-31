@@ -13,6 +13,7 @@ import GameSetup from './GameSetup'
 import LandingPage from './LandingPage'
 import Timer from './Timer'
 import EvaluationBar from './EvaluationBar'
+import ProbeVisualization from './ProbeVisualization'
 
 const ChessGame: React.FC = () => {
   const {
@@ -42,7 +43,7 @@ const ChessGame: React.FC = () => {
   } = useGameStore()
 
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
-  const [activeTab, setActiveTab] = useState<'moves' | 'analysis' | 'commentary' | 'settings'>('moves')
+  const [activeTab, setActiveTab] = useState<'moves' | 'analysis' | 'commentary' | 'settings' | 'probes'>('moves')
   const commentaryBoxRef = useRef<HTMLDivElement>(null)
 
   // Check if the selected engine constrains player side
@@ -58,7 +59,7 @@ const ChessGame: React.FC = () => {
   // Available tabs based on game mode
   const availableTabs = isCompetitive 
     ? ['moves'] as const
-    : ['moves', 'analysis', 'commentary', 'settings'] as const
+    : ['moves', 'analysis', 'commentary', 'settings', 'probes'] as const
 
   // Ensure active tab is available in current mode
   useEffect(() => {
@@ -286,6 +287,7 @@ const ChessGame: React.FC = () => {
                 {tab === 'analysis' && 'Analysis'}
                 {tab === 'commentary' && 'AI Thoughts'}
                 {tab === 'settings' && 'Settings'}
+                {tab === 'probes' && '🔬 Probes'}
             </button>
             ))}
           </div>
@@ -325,6 +327,12 @@ const ChessGame: React.FC = () => {
             {activeTab === 'settings' && !isCompetitive && (
               <div className="settings-tab">
                 <TemperatureControl />
+              </div>
+            )}
+
+            {activeTab === 'probes' && !isCompetitive && (
+              <div className="probes-tab">
+                <ProbeVisualization />
               </div>
             )}
           </div>
