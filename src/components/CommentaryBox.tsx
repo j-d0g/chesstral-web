@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import '../styles/CommentaryBox.css';
 import { CommentaryMessage } from '../types/CommentaryMessage';
 import RatingForm from './RatingForm';
-import {saveRating} from "../server/ChessAPIServer";
+import { apiService } from '../services/apiService';
 import {RatingJSON} from "../types/RatingJSON";
 
 type CommentaryBoxProps = {
@@ -56,21 +56,24 @@ const CommentaryBox: React.FC<CommentaryBoxProps> = ({ commentaryHistory, commen
 
   const handleRatingSubmit = (uuid: string, rating: {quality: number; correctness: number; relevance: number; salience: number; review: string }, index: number) => {
     const message = commentaryHistory[index];
-    const ratingJSON: RatingJSON = {
-      uuid: uuid,
-      engineName: message.engineName,
+    const ratingData = {
       fen: message.fen,
       move: message.move,
-      moveSequence: message.moveSequence,
-      commentary: message.commentary,
-      quality: rating.quality,
-      correctness: rating.correctness,
-      relevance: rating.relevance,
-      salience: rating.salience,
-      review: rating.review,
+      rating: rating.quality, // Use quality as the main rating
+      context: {
+        uuid: uuid,
+        engineName: message.engineName,
+        moveSequence: message.moveSequence,
+        commentary: message.commentary,
+        quality: rating.quality,
+        correctness: rating.correctness,
+        relevance: rating.relevance,
+        salience: rating.salience,
+        review: rating.review,
+      }
     };
 
-    saveRating(ratingJSON);
+    apiService.rateMove(ratingData);
     onRatingSubmit(index);
     setExpandedMessageIndex(null);
   };
