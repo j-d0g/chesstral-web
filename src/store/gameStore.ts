@@ -1,7 +1,28 @@
-import { create } from 'zustand'
 import { Chess } from 'chess.js'
-import { apiService } from '../services/apiService'
-import { CommentaryMessage } from '../types/CommentaryMessage'
+import { create } from 'zustand'
+import { apiService, describeApiError } from '../services/apiService'
+import type { EngineInfo } from '../services/apiService'
+import type { CommentaryMessage } from '../types/CommentaryMessage'
+import {
+  applyMove as applyClockMove,
+  incrementFor,
+  initialClock,
+  sideToMoveAfter,
+  tick as tickClockState,
+} from '../utils/clock'
+import type { ClockFormat, ClockSide, ClockState } from '../utils/clock'
+
+const START_FEN = new Chess().fen()
+
+export interface Evaluation {
+  score: number
+  mate: number | null
+}
+
+interface EngineConfig {
+  type: string
+  model?: string
+}
 
 interface GameState {
   fen: string
@@ -11,47 +32,52 @@ interface GameState {
   result: string | null
 }
 
-interface EngineConfig {
-  type: string
-  model?: string
-}
+type MoveInput = string | { from: string; to: string; promotion?: string }
 
 interface GameStore {
-  // State
+  engines: EngineInfo[]
+  enginesError: string | null
+  enginesLoading: boolean
   game: Chess
   gameState: GameState
   gameMode: 'landing' | 'competitive' | 'research'
   gameStatus: 'setup' | 'active' | 'finished'
   selectedEngine: EngineConfig
-  playerSide: 'white' | 'black'
+  playerSide: ClockSide
   isThinking: boolean
-  evaluation: number | null
+  evaluation: Evaluation | null
   commentaryHistory: CommentaryMessage[]
   temperature: number
-  timeFormat: 'blitz' | 'rapid' | 'classical' | 'unlimited'
-  
-  // Move navigation state
-  currentMoveIndex: number  // -1 = start position, 0 = after first move, etc.
-  fullGamePgn: string[]     // Complete game PGN (never changes during navigation)
-  
-  // Actions
-  makeHumanMove: (move: any) => Promise<boolean>
+  timeFormat: ClockFormat
+  clock: ClockState
+  startFen: string
+  positionVersion: number
+  gameId: string
+  error: string | null
+  errorIsAiMove: boolean
+  currentMoveIndex: number
+  fullGamePgn: string[]
+  loadEngines: () => Promise<void>
+  makeHumanMove: (move: MoveInput) => boolean
   startGame: () => void
   resetGame: () => void
   resignGame: () => void
   setGameMode: (mode: 'landing' | 'competitive' | 'research') => void
   switchSides: () => void
+  rematch: () => void
   setEngine: (engine: EngineConfig) => void
-  setPlayerSide: (side: 'white' | 'black') => void
+  setPlayerSide: (side: ClockSide) => void
   setTemperature: (temp: number) => void
-  setTimeFormat: (format: 'blitz' | 'rapid' | 'classical' | 'unlimited') => void
-  loadPosition: (fen: string, pgn?: string[]) => void
+  setTimeFormat: (format: ClockFormat) => void
+  loadPosition: (fen: string, pgn?: string[]) => boolean
+  loadPgn: (pgnText: string) => boolean
   getAIMove: () => Promise<void>
+  retryAIMove: () => Promise<void>
   evaluatePosition: () => Promise<void>
+  tickClock: () => void
+  dismissError: () => void
   addCommentaryMessage: (message: CommentaryMessage) => void
   markCommentaryReviewed: (index: number) => void
-  
-  // Move navigation actions
   goToMove: (moveIndex: number) => void
   goToNextMove: () => void
   goToPreviousMove: () => void
@@ -60,570 +86,664 @@ interface GameStore {
   continueFromHere: () => void
 }
 
+function replayGame(startFen: string, moves: string[], moveCount = moves.length): Chess {
+  const game = new Chess(startFen)
+  for (const move of moves.slice(0, moveCount)) game.move(move)
+  return game
+}
+
+function gameResult(game: Chess): string | null {
+  if (game.isCheckmate()) return `${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate`
+  if (game.isStalemate()) return 'Draw by stalemate'
+  if (game.isDraw()) return 'Draw'
+  return null
+}
+
+function gameStateFor(game: Chess, pgn = game.history()): GameState {
+  const isGameOver = game.isGameOver()
+  return {
+    fen: game.fen(),
+    pgn,
+    turn: game.turn(),
+    isGameOver,
+    result: isGameOver ? gameResult(game) : null,
+  }
+}
+
+function isAiTurn(game: Chess, playerSide: ClockSide): boolean {
+  return (game.turn() === 'w' && playerSide === 'black') ||
+    (game.turn() === 'b' && playerSide === 'white')
+}
+
+function chooseEngine(engines: EngineInfo[]): EngineInfo | undefined {
+  const available = engines.filter((engine) => engine.status === 'available')
+  return (
+    available.find((engine) => engine.name === 'nanogpt' && engine.models.length > 0) ??
+    available.find((engine) => engine.name === 'stockfish') ??
+    available[0]
+  )
+}
+
+function clockIsActive(gameMode: GameStore['gameMode'], format: ClockFormat): boolean {
+  return gameMode === 'competitive' && format !== 'unlimited'
+}
+
+function newGameId(): string {
+  return crypto.randomUUID()
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
-  // Initial state
+  engines: [],
+  enginesError: null,
+  enginesLoading: true,
   game: new Chess(),
-  gameState: {
-    fen: new Chess().fen(),
-    pgn: [],
-    turn: 'w',
-    isGameOver: false,
-    result: null,
-  },
-  gameMode: 'landing', // Start at landing page
-  gameStatus: 'setup', // Start in setup mode
-  selectedEngine: {
-    type: 'nanogpt',
-    model: 'small-8',
-  },
-  playerSide: 'black', // Default to black so NanoGPT plays white (its preferred color)
+  gameState: gameStateFor(new Chess()),
+  gameMode: 'landing',
+  gameStatus: 'setup',
+  selectedEngine: { type: 'nanogpt', model: 'small-8' },
+  playerSide: 'white',
   isThinking: false,
   evaluation: null,
   commentaryHistory: [],
-  temperature: 0.01, // Default to very low temperature for best performance
-  timeFormat: 'classical', // Default to classical time format
-  
-  // Move navigation state
-  currentMoveIndex: -1,  // Start at beginning
+  temperature: 0.01,
+  timeFormat: 'rapid',
+  clock: initialClock('rapid'),
+  startFen: START_FEN,
+  positionVersion: 0,
+  gameId: newGameId(),
+  error: null,
+  errorIsAiMove: false,
+  currentMoveIndex: -1,
   fullGamePgn: [],
 
-  // Actions
-  makeHumanMove: async (move: any) => {
-    const { game, gameStatus, playerSide, getAIMove, evaluatePosition, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
-
-    // Only allow moves if game is active
-    if (gameStatus !== 'active') {
-      console.log("Cannot make moves - game is not active")
-      return false
-    }
-
-    // Only allow moves if we're at the end of the game (live play mode)
-    if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
-      console.log("Cannot make moves while reviewing previous positions")
-      return false
-    }
-
-    // Create a TRUE copy of the game, including history, by using PGN.
-    const newGame = new Chess()
-    const pgn = game.pgn()
-    if (pgn) {
-      newGame.loadPgn(pgn)
-    }
-
+  loadEngines: async () => {
+    set({ enginesLoading: true, enginesError: null })
     try {
-      const isPlayersTurn =
-        (newGame.turn() === 'w' && playerSide === 'white') ||
-        (newGame.turn() === 'b' && playerSide === 'black')
-      
-      if (!isPlayersTurn) {
-        console.log("Not player's turn")
-        return false
+      const engines = await apiService.getEngines()
+      const selectedEngine = get().selectedEngine
+      const selectedInfo = engines.find(
+        (engine) => engine.name === selectedEngine.type && engine.status === 'available',
+      )
+      let nextEngine = selectedEngine
+      if (!selectedInfo || (selectedInfo.name === 'nanogpt' && selectedInfo.models.length === 0)) {
+        const preferred = chooseEngine(engines)
+        if (preferred) nextEngine = { type: preferred.name, model: preferred.models[0] }
+      } else if (
+        selectedInfo.models.length > 0 &&
+        !selectedInfo.models.includes(selectedEngine.model ?? '')
+      ) {
+        nextEngine = { type: selectedInfo.name, model: selectedInfo.models[0] }
       }
-
-      const moveResult = newGame.move(move)
-      
-      if (!moveResult) {
-        console.log('Invalid move')
-        return false
-      }
-
-      const moveNumber = Math.ceil(newGame.history().length / 2)
-      const isWhiteMove = moveResult.color === 'w'
-      addCommentaryMessage({
-        engineName: 'You',
-        moveNumber: isWhiteMove ? `${moveNumber}.` : `${moveNumber}...`,
-        moveSequence: moveResult.san,
-        commentary: '',
-        fen: newGame.fen(),
-        move: moveResult.san,
-        reviewed: false,
-      })
-
-      const newPgn = newGame.history()
 
       set({
-        game: newGame,
-        gameState: {
-          fen: newGame.fen(),
-          pgn: newPgn,
-          turn: newGame.turn(),
-          isGameOver: newGame.isGameOver(),
-          result: newGame.isGameOver() ? getGameResult(newGame) : null,
-        },
-        fullGamePgn: newPgn,
-        currentMoveIndex: newPgn.length - 1,
+        engines,
+        enginesError: null,
+        enginesLoading: false,
+        selectedEngine: nextEngine,
       })
 
-      if (!newGame.isGameOver()) {
-        await getAIMove()
-      } else {
-        // Game is over, set status to finished
-        set({ gameStatus: 'finished' })
+      const state = get()
+      if (
+        state.gameMode === 'research' &&
+        state.gameStatus === 'setup' &&
+        engines.some((engine) => engine.status === 'available')
+      ) {
+        state.startGame()
       }
-      
-      await evaluatePosition()
-
-      return true
     } catch (error) {
-      console.error('Error making move:', error)
-      // No need to revert, as we're using a copy. The original state is preserved until set() is called.
+      set({
+        engines: [],
+        enginesError: describeApiError(error),
+        enginesLoading: false,
+      })
+    }
+  },
+
+  makeHumanMove: (move) => {
+    const state = get()
+    if (
+      state.gameStatus !== 'active' ||
+      state.isThinking ||
+      state.currentMoveIndex !== state.fullGamePgn.length - 1 ||
+      !state.gameState ||
+      !((state.game.turn() === 'w' && state.playerSide === 'white') ||
+        (state.game.turn() === 'b' && state.playerSide === 'black'))
+    ) {
+      return false
+    }
+
+    let nextGame: Chess
+    try {
+      nextGame = replayGame(state.startFen, state.fullGamePgn)
+      const result = nextGame.move(move)
+      if (!result) return false
+
+      const now = Date.now()
+      const mover: ClockSide = result.color === 'w' ? 'white' : 'black'
+      let nextClock = state.clock
+      if (clockIsActive(state.gameMode, state.timeFormat)) {
+        const beforeMove = tickClockState(state.clock, state.game.turn(), now)
+        if (beforeMove[mover] === 0) {
+          set((current) => ({
+            clock: { ...beforeMove, runningSince: null },
+            gameState: {
+              ...current.gameState,
+              isGameOver: true,
+              result: `${mover === 'white' ? 'White' : 'Black'} loses on time`,
+            },
+            gameStatus: 'finished',
+            isThinking: false,
+            positionVersion: current.positionVersion + 1,
+          }))
+          return false
+        }
+        nextClock = applyClockMove(beforeMove, mover, now, incrementFor(state.timeFormat))
+      }
+
+      const moves = nextGame.history()
+      const moveNumber = Math.ceil(moves.length / 2)
+      const isGameOver = nextGame.isGameOver()
+      const resultText = isGameOver ? gameResult(nextGame) : null
+      const clock = isGameOver ? { ...nextClock, runningSince: null } : nextClock
+      const message: CommentaryMessage = {
+        engineName: 'You',
+        moveNumber: result.color === 'w' ? `${moveNumber}.` : `${moveNumber}...`,
+        moveSequence: result.san,
+        commentary: '',
+        fen: nextGame.fen(),
+        move: result.san,
+        reviewed: false,
+      }
+
+      set({
+        game: nextGame,
+        gameState: {
+          fen: nextGame.fen(),
+          pgn: moves,
+          turn: nextGame.turn(),
+          isGameOver,
+          result: resultText,
+        },
+        gameStatus: isGameOver ? 'finished' : 'active',
+        fullGamePgn: moves,
+        currentMoveIndex: moves.length - 1,
+        commentaryHistory: [...state.commentaryHistory, message],
+        clock,
+        evaluation: null,
+        error: null,
+        errorIsAiMove: false,
+        positionVersion: state.positionVersion + 1,
+      })
+
+      if (state.gameMode === 'research') void get().evaluatePosition()
+      if (!isGameOver) {
+        void get().getAIMove()
+      }
+      return true
+    } catch {
       return false
     }
   },
 
   startGame: () => {
-    console.log('Starting new game...')
-    const { playerSide, getAIMove } = get()
-    const newGame = new Chess()
-    
+    const state = get()
+    const game = new Chess()
+    const clock = initialClock(state.timeFormat)
+    const now = Date.now()
+    const runningClock = clockIsActive(state.gameMode, state.timeFormat)
+      ? { ...clock, runningSince: now }
+      : clock
+
     set({
-      game: newGame,
-      gameState: {
-        fen: newGame.fen(),
-        pgn: [],
-        turn: 'w',
-        isGameOver: false,
-        result: null,
-      },
+      game,
+      gameState: gameStateFor(game),
       gameStatus: 'active',
       isThinking: false,
       evaluation: null,
       commentaryHistory: [],
+      clock: runningClock,
+      startFen: START_FEN,
+      positionVersion: state.positionVersion + 1,
+      gameId: newGameId(),
+      error: null,
+      errorIsAiMove: false,
       currentMoveIndex: -1,
       fullGamePgn: [],
     })
-    
-    // If AI plays white (player is black), AI should make the first move
-    if (playerSide === 'black') {
-      setTimeout(() => {
-        getAIMove()
-      }, 500)
-    }
+
+    if (state.gameMode === 'research') void get().evaluatePosition()
+    if (state.playerSide === 'black') void get().getAIMove()
   },
 
   resetGame: () => {
-    const { gameMode } = get()
-    console.log('Resetting game...')
-    const newGame = new Chess()
-    
-    if (gameMode === 'competitive') {
-      // Go back to setup for competitive mode
-      set({
-        game: newGame,
-        gameState: {
-          fen: newGame.fen(),
-          pgn: [],
-          turn: 'w',
-          isGameOver: false,
-          result: null,
-        },
-        gameStatus: 'setup',
-        isThinking: false,
-        evaluation: null,
-        commentaryHistory: [],
-        currentMoveIndex: -1,
-        fullGamePgn: [],
-      })
-    } else {
-      // Go back to landing page for other modes
-      set({
-        gameMode: 'landing',
-        game: newGame,
-        gameState: {
-          fen: newGame.fen(),
-          pgn: [],
-          turn: 'w',
-          isGameOver: false,
-          result: null,
-        },
-        gameStatus: 'setup',
-        isThinking: false,
-        evaluation: null,
-        commentaryHistory: [],
-        currentMoveIndex: -1,
-        fullGamePgn: [],
-      })
+    const state = get()
+    if (state.gameMode === 'research') {
+      get().startGame()
+      return
     }
+
+    const game = new Chess()
+    set({
+      game,
+      gameState: gameStateFor(game),
+      gameStatus: 'setup',
+      isThinking: false,
+      evaluation: null,
+      commentaryHistory: [],
+      clock: initialClock(state.timeFormat),
+      startFen: START_FEN,
+      positionVersion: state.positionVersion + 1,
+      gameId: newGameId(),
+      error: null,
+      errorIsAiMove: false,
+      currentMoveIndex: -1,
+      fullGamePgn: [],
+    })
   },
 
-  setGameMode: (mode: 'landing' | 'competitive' | 'research') => {
-    console.log('Setting game mode:', mode)
-    set({ gameMode: mode })
-    
-    // If entering research mode, start immediately in active state
-    if (mode === 'research') {
-      const { playerSide, getAIMove } = get()
-      const newGame = new Chess()
-      
-      set({ 
-        gameStatus: 'active',
-        game: newGame,
-        gameState: {
-          fen: newGame.fen(),
-          pgn: [],
-          turn: 'w',
-          isGameOver: false,
-          result: null,
-        },
+  resignGame: () => {
+    const state = get()
+    if (state.gameStatus !== 'active') return
+    set({
+      gameState: {
+        ...state.gameState,
+        isGameOver: true,
+        result: `${state.playerSide === 'white' ? 'White' : 'Black'} resigned`,
+      },
+      gameStatus: 'finished',
+      clock: { ...state.clock, runningSince: null },
+      isThinking: false,
+      positionVersion: state.positionVersion + 1,
+    })
+  },
+
+  setGameMode: (mode) => {
+    const state = get()
+    if (mode === 'landing') {
+      set({
+        gameMode: mode,
+        gameStatus: 'setup',
+        isThinking: false,
+        clock: { ...state.clock, runningSince: null },
+        positionVersion: state.positionVersion + 1,
+      })
+      return
+    }
+    if (mode === 'competitive') {
+      set({
+        gameMode: mode,
+        gameStatus: 'setup',
         isThinking: false,
         evaluation: null,
-        commentaryHistory: [],
-        currentMoveIndex: -1,
-        fullGamePgn: [],
+        clock: initialClock(state.timeFormat),
+        positionVersion: state.positionVersion + 1,
       })
-      
-      // If AI plays white (player is black), AI should make the first move
-      if (playerSide === 'black') {
-        setTimeout(() => {
-          getAIMove()
-        }, 500)
-      }
+      return
     }
-    // If entering competitive mode, go to setup
-    else if (mode === 'competitive') {
-      set({ gameStatus: 'setup' })
+
+    const preferred = chooseEngine(state.engines)
+    let selectedEngine = state.selectedEngine
+    const selectedIsAvailable = state.engines.some(
+      (engine) =>
+        engine.name === selectedEngine.type &&
+        engine.status === 'available' &&
+        (engine.name !== 'nanogpt' || engine.models.length > 0),
+    )
+    if (!selectedIsAvailable && preferred) {
+      selectedEngine = { type: preferred.name, model: preferred.models[0] }
     }
+    set({
+      gameMode: mode,
+      gameStatus: 'setup',
+      selectedEngine,
+    })
+    if (state.engines.some((engine) => engine.status === 'available')) get().startGame()
   },
 
   switchSides: () => {
-    const { playerSide, gameMode, game, getAIMove } = get()
-    
-    // Only allow in research mode
-    if (gameMode !== 'research') {
-      console.log('Side switching only available in research mode')
+    const state = get()
+    if (
+      state.isThinking ||
+      state.gameMode === 'landing' ||
+      (state.gameMode === 'competitive' && state.gameStatus === 'active')
+    ) {
       return
     }
-    
-    const newSide = playerSide === 'white' ? 'black' : 'white'
-    console.log(`Switching sides from ${playerSide} to ${newSide}`)
-    
-    set({ playerSide: newSide })
-    
-    // If it's now the AI's turn and game isn't over, get AI move
-    const isNowAITurn = 
-      (game.turn() === 'w' && newSide === 'black') ||
-      (game.turn() === 'b' && newSide === 'white')
-    
-    if (!game.isGameOver() && isNowAITurn) {
-      setTimeout(() => {
-        getAIMove()
-      }, 500)
+    set({
+      playerSide: state.playerSide === 'white' ? 'black' : 'white',
+      positionVersion: state.positionVersion + 1,
+      error: null,
+      errorIsAiMove: false,
+    })
+    const current = get()
+    if (
+      current.gameStatus === 'active' &&
+      current.currentMoveIndex === current.fullGamePgn.length - 1 &&
+      isAiTurn(current.game, current.playerSide)
+    ) {
+      void current.getAIMove()
     }
   },
 
-  setEngine: (engine: EngineConfig) => {
-    console.log('Setting engine:', engine)
-    set({ selectedEngine: engine })
+  rematch: () => {
+    const state = get()
+    set({ playerSide: state.playerSide === 'white' ? 'black' : 'white' })
+    get().startGame()
   },
 
-  setPlayerSide: (side: 'white' | 'black') => {
-    console.log(`Attempting to set player side to: ${side}`)
-    const { playerSide: currentSide, resetGame } = get()
-
-    // Only reset the game if the side is actually changing
-    if (side !== currentSide) {
-      console.log(`Side changed from ${currentSide} to ${side}. Resetting game.`)
-      set({ playerSide: side })
-      resetGame()
-    } else {
-      console.log(`Side is already ${side}. No reset needed.`)
+  setEngine: (engine) => {
+    const state = get()
+    if (state.isThinking) return
+    set({
+      selectedEngine: engine,
+      positionVersion: state.positionVersion + 1,
+      error: null,
+      errorIsAiMove: false,
+    })
+    const next = get()
+    if (next.gameStatus === 'active' && isAiTurn(next.game, next.playerSide)) {
+      void next.getAIMove()
     }
   },
 
-  setTemperature: (temp: number) => {
-    console.log('Setting temperature:', temp)
-    set({ temperature: temp })
+  setPlayerSide: (side) => {
+    const state = get()
+    if (state.isThinking || state.playerSide === side) return
+    set({ playerSide: side, positionVersion: state.positionVersion + 1 })
   },
 
-  setTimeFormat: (format: 'blitz' | 'rapid' | 'classical' | 'unlimited') => {
-    console.log('Setting time format:', format)
-    set({ timeFormat: format })
+  setTemperature: (temperature) => set({ temperature }),
+
+  setTimeFormat: (timeFormat) => {
+    const state = get()
+    set({ timeFormat, clock: initialClock(timeFormat), positionVersion: state.positionVersion + 1 })
   },
 
-  loadPosition: (fen: string, pgn?: string[]) => {
+  loadPosition: (fen, pgn) => {
+    const state = get()
+    if (state.isThinking) return false
     try {
-      // Create a new game instance from the provided FEN
-      const newGame = new Chess()
-      newGame.load(fen)
-
-      // If PGN is provided, load it. This is more robust.
-      if (pgn && pgn.length > 0) {
-        newGame.loadPgn(pgn.join(' '))
+      const startFen = fen || START_FEN
+      const game = new Chess(startFen)
+      if (pgn !== undefined) {
+        for (const move of pgn) game.move(move)
       }
 
-      const newPgn = newGame.history()
-
+      const moves = game.history()
+      const nextState = gameStateFor(game, moves)
+      const isActive = state.gameStatus === 'active'
+      const gameStatus = state.gameMode === 'research' || isActive
+        ? game.isGameOver() ? 'finished' : 'active'
+        : state.gameStatus
+      const now = Date.now()
+      const baseClock = initialClock(state.timeFormat)
+      const clock = isActive && clockIsActive(state.gameMode, state.timeFormat)
+        ? { ...baseClock, runningSince: now }
+        : baseClock
       set({
-        game: newGame,
-        gameState: {
-          fen: newGame.fen(),
-          pgn: newPgn,
-          turn: newGame.turn(),
-          isGameOver: newGame.isGameOver(),
-          result: newGame.isGameOver() ? getGameResult(newGame) : null,
-        },
+        game,
+        gameState: nextState,
+        gameStatus,
+        startFen,
+        fullGamePgn: moves,
+        currentMoveIndex: moves.length - 1,
         commentaryHistory: [],
         evaluation: null,
-        fullGamePgn: newPgn,
-        currentMoveIndex: newPgn.length - 1,
+        clock: game.isGameOver() ? { ...clock, runningSince: null } : clock,
+        gameId: newGameId(),
+        error: null,
+        errorIsAiMove: false,
+        positionVersion: state.positionVersion + 1,
       })
-      
-      console.log(`Position loaded: ${newGame.history().length} moves, FEN: ${fen.substring(0, 50)}...`)
-      
-      // Evaluate the new position
-      get().evaluatePosition()
-    } catch (error) {
-      console.error('Failed to load FEN/PGN:', error)
-      alert('Invalid FEN or PGN string. Please check and try again.')
+      if (state.gameMode === 'research') void get().evaluatePosition()
+      if (gameStatus === 'active' && !game.isGameOver()) {
+        if (isAiTurn(game, state.playerSide)) void get().getAIMove()
+      }
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  loadPgn: (pgnText) => {
+    try {
+      const game = new Chess()
+      game.loadPgn(pgnText)
+      const startFen = game.header().FEN ?? START_FEN
+      return get().loadPosition(startFen, game.history())
+    } catch {
+      return false
     }
   },
 
   getAIMove: async () => {
-    const { game, gameStatus, selectedEngine, temperature, addCommentaryMessage, currentMoveIndex, fullGamePgn } = get()
-    
-    // Only allow AI moves if game is active
-    if (gameStatus !== 'active') {
-      console.log("Cannot get AI move - game is not active")
+    const initial = get()
+    if (
+      initial.gameStatus !== 'active' ||
+      initial.isThinking ||
+      initial.game.isGameOver() ||
+      initial.currentMoveIndex !== initial.fullGamePgn.length - 1 ||
+      !isAiTurn(initial.game, initial.playerSide)
+    ) {
       return
     }
-    
-    // Only allow AI moves if we're at the end of the game (live play mode)
-    if (currentMoveIndex !== fullGamePgn.length - 1 && fullGamePgn.length > 0) {
-      console.log("Cannot get AI move while reviewing previous positions")
-      return
-    }
-    
-    if (game.isGameOver()) return
 
-    set({ isThinking: true })
+    const version = initial.positionVersion
+    const game = replayGame(initial.startFen, initial.fullGamePgn)
+    set({ isThinking: true, error: null, errorIsAiMove: false })
 
     try {
       const response = await apiService.getMove({
         fen: game.fen(),
         pgn: game.history(),
-        engine: selectedEngine.type,
-        model: selectedEngine.model,
-        temperature: temperature,
+        engine: initial.selectedEngine.type,
+        model: initial.selectedEngine.model,
+        temperature: initial.temperature,
       })
 
-      // Create a TRUE copy of the game to apply the AI's move to.
-      const newGame = new Chess()
-      const pgn = game.pgn()
-      if (pgn) {
-        newGame.loadPgn(pgn)
+      if (get().positionVersion !== version) return
+      const current = get()
+      const mover: ClockSide = game.turn() === 'w' ? 'white' : 'black'
+      const now = Date.now()
+      let nextClock = current.clock
+      if (clockIsActive(current.gameMode, current.timeFormat)) {
+        const beforeMove = tickClockState(current.clock, game.turn(), now)
+        if (beforeMove[mover] === 0) {
+          set((state) => ({
+            clock: { ...beforeMove, runningSince: null },
+            gameState: {
+              ...state.gameState,
+              isGameOver: true,
+              result: `${mover === 'white' ? 'White' : 'Black'} loses on time`,
+            },
+            gameStatus: 'finished',
+            isThinking: false,
+            positionVersion: state.positionVersion + 1,
+          }))
+          return
+        }
+        nextClock = applyClockMove(beforeMove, mover, now, incrementFor(current.timeFormat))
       }
-      
-      const moveResult = newGame.move(response.move)
 
-      if (moveResult) {
-        const moveNumber = Math.ceil(newGame.history().length / 2)
-        const isWhiteMove = moveResult.color === 'w'
-
-        addCommentaryMessage({
-          engineName: `${selectedEngine.type}${selectedEngine.model ? ` (${selectedEngine.model})` : ''}`,
-          moveNumber: isWhiteMove ? `${moveNumber}.` : `${moveNumber}...`,
-          moveSequence: moveResult.san,
-          commentary: response.thoughts || response.raw_response || 'No thoughts provided',
-          fen: newGame.fen(),
-          rawResponse: response.raw_response,
-          move: moveResult.san,
-          reviewed: false,
-        })
-        
-        const newPgn = newGame.history()
-        
-        set({
-          game: newGame,
-          gameState: {
-            fen: newGame.fen(),
-            pgn: newPgn,
-            turn: newGame.turn(),
-            isGameOver: newGame.isGameOver(),
-            result: newGame.isGameOver() ? getGameResult(newGame) : null,
-          },
-          gameStatus: newGame.isGameOver() ? 'finished' : 'active',
-          fullGamePgn: newPgn,
-          currentMoveIndex: newPgn.length - 1,
-        })
-      } else {
-        throw new Error(`Invalid move from AI: ${response.move}`)
+      const moveResult = game.move(response.move)
+      const moves = game.history()
+      const isGameOver = game.isGameOver()
+      const resultText = isGameOver ? gameResult(game) : null
+      const moveNumber = Math.ceil(moves.length / 2)
+      const message: CommentaryMessage = {
+        engineName: `${initial.selectedEngine.type}${initial.selectedEngine.model ? ` (${initial.selectedEngine.model})` : ''}`,
+        moveNumber: moveResult.color === 'w' ? `${moveNumber}.` : `${moveNumber}...`,
+        moveSequence: moveResult.san,
+        commentary: response.thoughts || response.raw_response || 'No thoughts provided',
+        fen: game.fen(),
+        rawResponse: response.raw_response,
+        move: moveResult.san,
+        reviewed: false,
       }
+
+      set({
+        game,
+        gameState: {
+          fen: game.fen(),
+          pgn: moves,
+          turn: game.turn(),
+          isGameOver,
+          result: resultText,
+        },
+        gameStatus: isGameOver ? 'finished' : 'active',
+        fullGamePgn: moves,
+        currentMoveIndex: moves.length - 1,
+        commentaryHistory: [...current.commentaryHistory, message],
+        clock: isGameOver ? { ...nextClock, runningSince: null } : nextClock,
+        isThinking: false,
+        evaluation: null,
+        error: null,
+        errorIsAiMove: false,
+        positionVersion: version + 1,
+      })
+      if (current.gameMode === 'research') void get().evaluatePosition()
     } catch (error) {
-      console.error('Error getting AI move:', error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      alert(`AI failed to make a move: ${errorMessage}`)
+      if (get().positionVersion === version) {
+        console.error('AI move request failed:', error)
+        set({
+          error: describeApiError(error),
+          errorIsAiMove: true,
+        })
+      }
     } finally {
-      set({ isThinking: false })
-      get().evaluatePosition()
+      if (get().positionVersion === version && get().isThinking) set({ isThinking: false })
     }
+  },
+
+  retryAIMove: async () => {
+    set({ error: null, errorIsAiMove: false })
+    await get().getAIMove()
   },
 
   evaluatePosition: async () => {
-    const { game } = get()
-    if (game.isGameOver()) {
+    const initial = get()
+    if (initial.gameMode !== 'research') {
       set({ evaluation: null })
       return
     }
+    if (initial.game.isGameOver()) {
+      const isCheckmate = initial.game.isCheckmate()
+      const score = isCheckmate ? initial.game.turn() === 'w' ? -1000 : 1000 : 0
+      set({ evaluation: { score, mate: isCheckmate ? 0 : null } })
+      return
+    }
+    const version = initial.positionVersion
     try {
-      const response = await apiService.evaluatePosition({ fen: game.fen() })
-      set({ evaluation: response.evaluation })
+      const response = await apiService.evaluatePosition({ fen: initial.game.fen() })
+      if (get().positionVersion === version && get().gameMode === 'research') {
+        set({ evaluation: { score: response.evaluation, mate: response.mate ?? null } })
+      }
     } catch (error) {
-      console.error('Error evaluating position:', error)
-      set({ evaluation: null })
+      if (get().positionVersion === version) {
+        console.error('Position evaluation failed:', error)
+        set({
+          evaluation: null,
+          error: describeApiError(error),
+          errorIsAiMove: false,
+        })
+      }
     }
   },
 
-  addCommentaryMessage: (message: CommentaryMessage) => {
-    set(state => ({
-      commentaryHistory: [...state.commentaryHistory, message],
-    }))
-  },
-
-  markCommentaryReviewed: (index: number) => {
-    set(state => {
-      const newHistory = [...state.commentaryHistory]
-      if (newHistory[index]) {
-        newHistory[index].reviewed = true
-      }
-      return { commentaryHistory: newHistory }
-    })
-  },
-
-  // Move navigation actions
-  goToMove: (moveIndex: number) => {
-    const { fullGamePgn } = get()
-    
-    // Clamp moveIndex to valid range
-    const clampedIndex = Math.max(-1, Math.min(moveIndex, fullGamePgn.length - 1))
-    
-    try {
-      const newGame = new Chess()
-      
-      if (clampedIndex >= 0) {
-        // Play moves up to the specified index
-        const movesToPlay = fullGamePgn.slice(0, clampedIndex + 1)
-        for (const move of movesToPlay) {
-          newGame.move(move)
-        }
-      }
-      
+  tickClock: () => {
+    const state = get()
+    if (
+      !clockIsActive(state.gameMode, state.timeFormat) ||
+      state.gameStatus !== 'active' ||
+      state.clock.runningSince === null
+    ) {
+      return
+    }
+    const startingTurn = state.startFen.split(' ')[1] === 'b' ? 'b' : 'w'
+    const turn = sideToMoveAfter(startingTurn, state.fullGamePgn.length)
+    const clock = tickClockState(state.clock, turn, Date.now())
+    const side: ClockSide = turn === 'w' ? 'white' : 'black'
+    if (clock[side] === 0) {
       set({
-        game: newGame,
+        clock: { ...clock, runningSince: null },
         gameState: {
-          fen: newGame.fen(),
-          pgn: newGame.history(),
-          turn: newGame.turn(),
-          isGameOver: newGame.isGameOver(),
-          result: newGame.isGameOver() ? getGameResult(newGame) : null,
+          ...state.gameState,
+          isGameOver: true,
+          result: `${side === 'white' ? 'White' : 'Black'} loses on time`,
         },
-        currentMoveIndex: clampedIndex,
+        gameStatus: 'finished',
+        isThinking: false,
+        positionVersion: state.positionVersion + 1,
       })
-      
-      get().evaluatePosition()
-    } catch (error) {
-      console.error('Error navigating to move:', error)
+      return
+    }
+    set({ clock })
+  },
+
+  dismissError: () => set({ error: null, errorIsAiMove: false }),
+
+  addCommentaryMessage: (message) =>
+    set((state) => ({ commentaryHistory: [...state.commentaryHistory, message] })),
+
+  markCommentaryReviewed: (index) =>
+    set((state) => ({
+      commentaryHistory: state.commentaryHistory.map((message, currentIndex) =>
+        currentIndex === index ? { ...message, reviewed: true } : message,
+      ),
+    })),
+
+  goToMove: (moveIndex) => {
+    const state = get()
+    if (state.isThinking) return
+    const clampedIndex = Math.max(-1, Math.min(moveIndex, state.fullGamePgn.length - 1))
+    try {
+      const moves = state.fullGamePgn.slice(0, clampedIndex + 1)
+      const game = replayGame(state.startFen, moves)
+      set({
+        game,
+        gameState: gameStateFor(game, moves),
+        currentMoveIndex: clampedIndex,
+        evaluation: null,
+        error: null,
+        errorIsAiMove: false,
+        positionVersion: state.positionVersion + 1,
+      })
+      if (state.gameMode === 'research') void get().evaluatePosition()
+    } catch {
+      return
     }
   },
 
-  goToNextMove: () => {
-    const { currentMoveIndex, fullGamePgn } = get()
-    if (currentMoveIndex < fullGamePgn.length - 1) {
-      get().goToMove(currentMoveIndex + 1)
-    }
-  },
-
-  goToPreviousMove: () => {
-    const { currentMoveIndex } = get()
-    if (currentMoveIndex > -1) {
-      get().goToMove(currentMoveIndex - 1)
-    }
-  },
-
-  goToStart: () => {
-    get().goToMove(-1)
-  },
-
-  goToEnd: () => {
-    const { fullGamePgn } = get()
-    get().goToMove(fullGamePgn.length - 1)
-  },
+  goToNextMove: () => get().goToMove(get().currentMoveIndex + 1),
+  goToPreviousMove: () => get().goToMove(get().currentMoveIndex - 1),
+  goToStart: () => get().goToMove(-1),
+  goToEnd: () => get().goToMove(get().fullGamePgn.length - 1),
 
   continueFromHere: () => {
-    const { currentMoveIndex, fullGamePgn, game, playerSide, getAIMove } = get()
-    
-    // If already at the end, no need to continue
-    if (currentMoveIndex === fullGamePgn.length - 1) {
+    const state = get()
+    if (state.isThinking) return
+    const moves = state.fullGamePgn.slice(0, state.currentMoveIndex + 1)
+    try {
+      const game = replayGame(state.startFen, moves)
+      const isGameOver = game.isGameOver()
+      const gameStatus = isGameOver ? 'finished' : 'active'
+      set({
+        game,
+        gameState: gameStateFor(game, moves),
+        fullGamePgn: moves,
+        currentMoveIndex: moves.length - 1,
+        gameStatus,
+        evaluation: null,
+        error: null,
+        errorIsAiMove: false,
+        positionVersion: state.positionVersion + 1,
+      })
+      if (!isGameOver) {
+        if (state.gameMode === 'research') void get().evaluatePosition()
+        if (isAiTurn(game, state.playerSide)) void get().getAIMove()
+      }
+    } catch {
       return
     }
-    
-    // Truncate the game history at the current position
-    const newPgn = currentMoveIndex >= 0 ? fullGamePgn.slice(0, currentMoveIndex + 1) : []
-    
-    // Update the full game PGN to the truncated version
-    set({
-      fullGamePgn: newPgn,
-      currentMoveIndex: newPgn.length - 1,
-      gameState: {
-        fen: game.fen(),
-        pgn: game.history(),
-        turn: game.turn(),
-        isGameOver: game.isGameOver(),
-        result: game.isGameOver() ? getGameResult(game) : null,
-      },
-    })
-    
-    console.log(`Continuing from move ${currentMoveIndex + 1}. Game truncated to ${newPgn.length} moves.`)
-    
-    // If it's the AI's turn and the game isn't over, get AI move
-    const isPlayersTurn = 
-      (game.turn() === 'w' && playerSide === 'white') ||
-      (game.turn() === 'b' && playerSide === 'black')
-    
-    if (!game.isGameOver() && !isPlayersTurn) {
-      setTimeout(() => {
-        getAIMove()
-      }, 500)
-    }
-  },
-
-  resignGame: () => {
-    const { playerSide, game } = get()
-    console.log('Player resigned')
-    
-    // Create a copy of the game and set it as finished with resignation result
-    const newGame = new Chess()
-    const pgn = game.pgn()
-    if (pgn) {
-      newGame.loadPgn(pgn)
-    }
-    
-    // Determine result based on who resigned
-    const result = playerSide === 'white' ? '0-1 (White resigned)' : '1-0 (Black resigned)'
-    
-    set({
-      game: newGame,
-      gameState: {
-        fen: newGame.fen(),
-        pgn: newGame.history(),
-        turn: newGame.turn(),
-        isGameOver: true,
-        result: result,
-      },
-      gameStatus: 'finished',
-      isThinking: false,
-    })
   },
 }))
-
-function getGameResult(game: Chess): string {
-  if (game.isCheckmate()) {
-    return game.turn() === 'b' ? 'White wins by checkmate' : 'Black wins by checkmate'
-  }
-  if (game.isDraw()) {
-    if (game.isStalemate()) return 'Draw by stalemate'
-    if (game.isThreefoldRepetition()) return 'Draw by threefold repetition'
-    if (game.isInsufficientMaterial()) return 'Draw by insufficient material'
-    return 'Draw by 50-move rule'
-  }
-  return 'Game over'
-} 
