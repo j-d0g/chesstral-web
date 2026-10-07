@@ -4,126 +4,92 @@ export interface OpeningInfo {
   eco: string
   name: string
   pgn: string
-  epd?: string
+  epd: string
 }
 
-class OpeningBookService {
-  private openings: Map<string, OpeningInfo> = new Map()
+function fenToEpd(fen: string): string {
+  return fen.split(' ').slice(0, 4).join(' ')
+}
+
+function parsePgnMoves(pgn: string): string[] {
+  return pgn
+    .replace(/\d+\.(?:\.\.)?/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.replace(/[!?+#]+$/g, ''))
+    .filter((token) => token && !['1-0', '0-1', '1/2-1/2', '*'].includes(token))
+}
+
+export function parseOpeningTsv(text: string): OpeningInfo[] {
+  const openings: OpeningInfo[] = []
+
+  for (const line of text.split(/\r?\n/).slice(1)) {
+    const [eco, name, pgn] = line.split('\t')
+    if (!eco || !name || !pgn) continue
+
+    try {
+      const chess = new Chess()
+      for (const move of parsePgnMoves(pgn)) chess.move(move)
+      openings.push({ eco, name, pgn, epd: fenToEpd(chess.fen()) })
+    } catch {
+      continue
+    }
+  }
+
+  return openings
+}
+
+export class OpeningBookService {
+  private openings = new Map<string, OpeningInfo>()
   private loaded = false
 
   async loadOpenings(): Promise<void> {
     if (this.loaded) return
 
     try {
-      const files = ['a.tsv', 'b.tsv', 'c.tsv', 'd.tsv', 'e.tsv']
-      
-      for (const file of files) {
+      for (const file of ['a.tsv', 'b.tsv', 'c.tsv', 'd.tsv', 'e.tsv']) {
         const response = await fetch(`/data/${file}`)
-        const text = await response.text()
-        this.parseTSV(text)
+        if (!response.ok) throw new Error(`Failed to load opening book file ${file}`)
+        this.addTsv(await response.text())
       }
-      
       this.loaded = true
-      console.log(`Loaded ${this.openings.size} chess openings`)
     } catch (error) {
       console.error('Failed to load opening book:', error)
     }
   }
 
-  private parseTSV(text: string): void {
-    const lines = text.split('\n')
-    // Skip header line
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
-
-      const parts = line.split('\t')
-      if (parts.length >= 3) {
-        const [eco, name, pgn] = parts
-        
-        try {
-          // Play through the moves to get the final position
-          const chess = new Chess()
-          const moves = this.parsePGN(pgn)
-          
-          for (const move of moves) {
-            chess.move(move)
-          }
-          
-          // Get EPD (FEN without move numbers)
-          const fen = chess.fen()
-          const epd = this.fenToEpd(fen)
-          
-          const opening: OpeningInfo = {
-            eco,
-            name,
-            pgn,
-            epd
-          }
-          
-          // Store by EPD for fast lookup
-          this.openings.set(epd, opening)
-        } catch (error) {
-          // Skip invalid PGN entries
-          console.warn(`Invalid PGN for ${name}: ${pgn}`)
-        }
-      }
+  addTsv(text: string): void {
+    for (const opening of parseOpeningTsv(text)) {
+      this.openings.set(opening.epd, opening)
     }
-  }
-
-  private parsePGN(pgn: string): string[] {
-    // Simple PGN parser - extract moves only
-    const moves: string[] = []
-    const tokens = pgn.split(/\s+/)
-    
-    for (const token of tokens) {
-      // Skip move numbers (1., 2., etc.)
-      if (/^\d+\./.test(token)) continue
-      
-      // Skip annotations and comments
-      if (token.includes('(') || token.includes(')') || 
-          token.includes('{') || token.includes('}') ||
-          token.includes('$') || token.includes('!') || 
-          token.includes('?')) continue
-      
-      // Skip result indicators
-      if (token === '1-0' || token === '0-1' || token === '1/2-1/2' || token === '*') continue
-      
-      if (token.trim()) {
-        moves.push(token.trim())
-      }
-    }
-    
-    return moves
-  }
-
-  private fenToEpd(fen: string): string {
-    // Convert FEN to EPD by removing halfmove and fullmove counters
-    const parts = fen.split(' ')
-    if (parts.length >= 4) {
-      return parts.slice(0, 4).join(' ')
-    }
-    return fen
   }
 
   lookupOpening(fen: string): OpeningInfo | null {
-    if (!this.loaded) return null
-    
-    const epd = this.fenToEpd(fen)
-    return this.openings.get(epd) || null
+    return this.openings.get(fenToEpd(fen)) ?? null
+  }
+
+  currentOpening(history: string[], startFen: string): OpeningInfo | null {
+    const chess = new Chess(startFen)
+    let deepest = this.lookupOpening(chess.fen())
+
+    for (const move of history) {
+      try {
+        chess.move(move)
+      } catch {
+        break
+      }
+      deepest = this.lookupOpening(chess.fen()) ?? deepest
+    }
+
+    return deepest
   }
 
   isPositionInBook(fen: string): boolean {
     return this.lookupOpening(fen) !== null
   }
 
-  getOpeningStats(): { total: number, loaded: boolean } {
-    return {
-      total: this.openings.size,
-      loaded: this.loaded
-    }
+  getOpeningStats(): { total: number; loaded: boolean } {
+    return { total: this.openings.size, loaded: this.loaded }
   }
 }
 
-// Export singleton instance
-export const openingBook = new OpeningBookService() 
+export const openingBook = new OpeningBookService()

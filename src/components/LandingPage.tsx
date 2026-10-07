@@ -1,10 +1,3 @@
-/**
- * LandingPage.tsx - Main Landing Page
- * 
- * PURPOSE: Entry point for users to choose their experience
- * FEATURES: Three main paths - competitive, research, leaderboard
- */
-
 import React from 'react'
 import { useGameStore } from '../store/gameStore'
 
@@ -14,20 +7,20 @@ const LandingPage: React.FC = () => {
   return (
     <div className="landing-page">
       <div className="landing-header">
-        <h1>🎯 ChessGPT Platform</h1>
-        <p>Challenge AI engines, explore chess research, and discover the future of AI chess</p>
+        <h1>🎯 ChessGPT</h1>
+        <p>Play against AI engines or explore chess positions.</p>
       </div>
 
       <div className="landing-options">
         <div className="option-card competitive" onClick={() => setGameMode('competitive')}>
           <div className="card-icon">🏆</div>
-          <h2>Challenge Our Bots</h2>
-          <p>Official games with ELO tracking, time controls, and competitive rankings</p>
+          <h2>Challenge</h2>
+          <p>Choose a clock and play an AI engine. Challenge mode has no evaluation, analysis, or takebacks, and includes resign.</p>
           <div className="card-features">
-            <span>• ELO Rating System</span>
-            <span>• Official Game Records</span>
-            <span>• Multiple AI Engines</span>
-            <span>• Time Controls</span>
+            <span>• Configurable time controls</span>
+            <span>• Resign option</span>
+            <span>• Multiple AI engines</span>
+            <span>• No takebacks</span>
           </div>
           <button className="card-button">Start Challenge</button>
         </div>
@@ -35,27 +28,14 @@ const LandingPage: React.FC = () => {
         <div className="option-card research" onClick={() => setGameMode('research')}>
           <div className="card-icon">🔬</div>
           <h2>Research Playground</h2>
-          <p>Experiment freely with AI engines, analyze positions, and explore chess insights</p>
+          <p>Explore positions, review moves, and analyze games with an available AI engine.</p>
           <div className="card-features">
-            <span>• Live Engine Switching</span>
-            <span>• Move Navigation</span>
-            <span>• Position Analysis</span>
-            <span>• PGN Editing</span>
+            <span>• Engine selection</span>
+            <span>• Position evaluation</span>
+            <span>• Move analysis</span>
+            <span>• FEN and PGN loading</span>
           </div>
           <button className="card-button">Enter Playground</button>
-        </div>
-
-        <div className="option-card leaderboard disabled">
-          <div className="card-icon">📊</div>
-          <h2>LLM Leaderboard</h2>
-          <p>Compare AI engine performance, view statistics, and track improvements</p>
-          <div className="card-features">
-            <span>• Engine Rankings</span>
-            <span>• Performance Metrics</span>
-            <span>• Historical Data</span>
-            <span>• Model Comparisons</span>
-          </div>
-          <button className="card-button disabled">Coming Soon</button>
         </div>
       </div>
 
@@ -66,4 +46,4 @@ const LandingPage: React.FC = () => {
   )
 }
 
-export default LandingPage 
+export default LandingPage

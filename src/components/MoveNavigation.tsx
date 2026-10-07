@@ -11,6 +11,7 @@ import { useGameStore } from '../store/gameStore'
 const MoveNavigation: React.FC = () => {
   const {
     gameMode,
+    isThinking,
     currentMoveIndex,
     fullGamePgn,
     goToMove,
@@ -64,7 +65,7 @@ const MoveNavigation: React.FC = () => {
       <div className="move-controls">
         <button 
           onClick={goToStart}
-          disabled={isAtStart}
+          disabled={isThinking || isAtStart}
           className="nav-btn"
           title="Go to start (Home)"
         >
@@ -73,7 +74,7 @@ const MoveNavigation: React.FC = () => {
         
         <button 
           onClick={goToPreviousMove}
-          disabled={isAtStart}
+          disabled={isThinking || isAtStart}
           className="nav-btn"
           title="Previous move (←)"
         >
@@ -86,7 +87,7 @@ const MoveNavigation: React.FC = () => {
         
         <button 
           onClick={goToNextMove}
-          disabled={isAtEnd || totalMoves === 0}
+          disabled={isThinking || isAtEnd || totalMoves === 0}
           className="nav-btn"
           title="Next move (→)"
         >
@@ -95,7 +96,7 @@ const MoveNavigation: React.FC = () => {
         
         <button 
           onClick={goToEnd}
-          disabled={isAtEnd || totalMoves === 0}
+          disabled={isThinking || isAtEnd || totalMoves === 0}
           className="nav-btn"
           title="Go to end (End)"
         >
@@ -112,6 +113,7 @@ const MoveNavigation: React.FC = () => {
             value={currentMoveIndex}
             onChange={(e) => goToMove(parseInt(e.target.value))}
             className="move-slider"
+            disabled={isThinking}
           />
         </div>
       )}
@@ -121,6 +123,7 @@ const MoveNavigation: React.FC = () => {
         <div className="continue-from-here">
           <button 
             onClick={continueFromHere}
+            disabled={isThinking}
             className="continue-btn"
             title="Continue playing from this position (truncates future moves)"
           >

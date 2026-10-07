@@ -2,10 +2,11 @@ import React, { useState } from 'react'
 import { Chess } from 'chess.js'
 
 interface PositionInputProps {
-  onLoadPosition: (fen: string, pgn?: string[]) => void
+  onLoadPosition: (fen: string, pgn?: string[]) => boolean | void
+  disabled?: boolean
 }
 
-const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
+const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition, disabled = false }) => {
   const [positionInput, setPositionInput] = useState('')
   const [inputType, setInputType] = useState<'pgn' | 'fen'>('pgn') // PGN is now default
   const [isExpanded, setIsExpanded] = useState(false)
@@ -20,11 +21,13 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
 
     try {
       if (inputType === 'pgn') {
-        const { fen, pgn } = parsePgnMoves(trimmedInput);
-        onLoadPosition(fen, pgn);
+        const { pgn } = parsePgnMoves(trimmedInput);
+        if (onLoadPosition(new Chess().fen(), pgn) === false) {
+          throw new Error('Unable to load this position')
+        }
       } else {
         const fen = validateFen(trimmedInput);
-        onLoadPosition(fen);
+        if (onLoadPosition(fen) === false) throw new Error('Unable to load this position')
       }
 
       setPositionInput('')
@@ -35,7 +38,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
     }
   }
 
-  const parsePgnMoves = (pgnInput: string): { fen: string, pgn: string[] } => {
+  const parsePgnMoves = (pgnInput: string): { pgn: string[] } => {
     try {
       const game = new Chess()
       
@@ -47,10 +50,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
       
       // If it's empty after cleaning, return starting position
       if (!cleanPgn) {
-        return {
-          fen: game.fen(),
-          pgn: []
-        }
+        return { pgn: [] }
       }
       
       // Split into individual moves
@@ -68,10 +68,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
         }
       }
       
-      return {
-        fen: game.fen(),
-        pgn: game.history()
-      }
+      return { pgn: game.history() }
     } catch (err) {
       throw new Error(`PGN parsing error: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
@@ -88,14 +85,16 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
   }
 
   const handleLoadStartingPosition = () => {
-    onLoadPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', [])
+    onLoadPosition(new Chess().fen(), [])
     setError(null)
   }
 
   const loadPresetPosition = (name: string, pgn: string) => {
     try {
-      const { fen, pgn: pgnMoves } = parsePgnMoves(pgn)
-      onLoadPosition(fen, pgnMoves)
+      const { pgn: pgnMoves } = parsePgnMoves(pgn)
+      if (onLoadPosition(new Chess().fen(), pgnMoves) === false) {
+        throw new Error('Unable to load this position')
+      }
       setError(null)
     } catch (err) {
       setError(`Error loading ${name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -124,6 +123,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
         <button 
           onClick={handleLoadStartingPosition}
           className="control-button"
+          disabled={disabled}
         >
           ♛ Starting Position
         </button>
@@ -131,6 +131,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
         <button 
           onClick={() => setIsExpanded(!isExpanded)}
           className="control-button"
+          disabled={disabled}
         >
           {isExpanded ? '▼' : '▶'} Custom Position
         </button>
@@ -145,6 +146,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
                 value="pgn"
                 checked={inputType === 'pgn'}
                 onChange={(e) => setInputType(e.target.value as 'pgn' | 'fen')}
+                disabled={disabled}
               />
               PGN Moves (Recommended)
             </label>
@@ -154,6 +156,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
                 value="fen"
                 checked={inputType === 'fen'}
                 onChange={(e) => setInputType(e.target.value as 'pgn' | 'fen')}
+                disabled={disabled}
               />
               FEN Notation
             </label>
@@ -173,10 +176,11 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
               }
               className={`position-field ${error ? 'error' : ''}`}
               rows={3}
+              disabled={disabled}
             />
             <button 
               onClick={handleLoadPosition}
-              disabled={!positionInput.trim()}
+              disabled={disabled || !positionInput.trim()}
               className="load-button"
             >
               Load {inputType.toUpperCase()}
@@ -208,6 +212,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition }) => {
                 key={position.name}
                   onClick={() => loadPresetPosition(position.name, position.pgn)}
                 className="preset-button"
+                disabled={disabled}
               >
                 {position.name}
               </button>

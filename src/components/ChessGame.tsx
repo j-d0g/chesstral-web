@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Chessboard } from 'react-chessboard'
+import type { Square } from 'chess.js'
 import { useGameStore } from '../store/gameStore'
 import EngineSelector from './EngineSelector'
 import GameControls from './GameControls'
@@ -13,13 +14,19 @@ import GameSetup from './GameSetup'
 import LandingPage from './LandingPage'
 import Timer from './Timer'
 import EvaluationBar from './EvaluationBar'
+import { openingBook } from '../services/openingBook'
 
 const ChessGame: React.FC = () => {
   const {
+    game,
     gameState,
     currentMoveIndex,
+    fullGamePgn,
+    startFen,
     gameMode,
     gameStatus,
+    enginesError,
+    enginesLoading,
     evaluation,
     isThinking,
     selectedEngine,
@@ -27,18 +34,23 @@ const ChessGame: React.FC = () => {
     temperature,
     timeFormat,
     commentaryHistory,
+    gameId,
+    error,
+    errorIsAiMove,
     goToPreviousMove,
     goToNextMove,
     makeHumanMove,
     setEngine,
-    setPlayerSide,
+    setGameMode,
     setTemperature,
     switchSides,
     resetGame,
     resignGame,
     goToMove,
     loadPosition,
-    markCommentaryReviewed
+    markCommentaryReviewed,
+    dismissError,
+    retryAIMove,
   } = useGameStore()
 
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
@@ -48,6 +60,10 @@ const ChessGame: React.FC = () => {
   // Check if the selected engine constrains player side
   const isNanoGPT = selectedEngine.type === 'nanogpt'
   const isCompetitive = gameMode === 'competitive'
+  const currentOpening = openingBook.currentOpening(
+    fullGamePgn.slice(0, currentMoveIndex + 1),
+    startFen,
+  )
 
   // Remove the automatic side enforcement for NanoGPT - let users choose but show warning
   useEffect(() => {
@@ -90,32 +106,18 @@ const ChessGame: React.FC = () => {
 
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string) => {
+      const isPromotion =
+        game.get(sourceSquare as Square)?.type === 'p' &&
+        (targetSquare.endsWith('8') || targetSquare.endsWith('1'))
       const move = {
         from: sourceSquare,
         to: targetSquare,
-        promotion: 'q',
+        ...(isPromotion ? { promotion: piece.slice(1, 2).toLowerCase() } : {}),
       }
-
-      // Make the move - the store will handle validation and rollback if needed
-      makeHumanMove(move).then(result => {
-        if (!result) {
-          console.log('Move was invalid or rejected')
-          // The store has already rolled back the move
-        }
-      }).catch(error => {
-        console.error('Error making move:', error)
-      })
-      
-      // Return true to allow immediate visual feedback
-      return true
+      return makeHumanMove(move)
     },
-    [makeHumanMove]
+    [game, makeHumanMove]
   )
-
-  const handleSideChange = (side: 'white' | 'black') => {
-    setPlayerSide(side)
-    setBoardOrientation(side)
-  }
 
   const handleFlipBoard = () => {
     setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')
@@ -131,7 +133,11 @@ const ChessGame: React.FC = () => {
     }
   }
 
-  const currentTurn = gameState.turn === 'w' ? 'White' : 'Black'
+  const handleMenu = () => {
+    if (gameStatus === 'active' && !window.confirm('Leave this game and return to the menu?')) return
+    setGameMode('landing')
+  }
+
   const isPlayersTurn = (gameState.turn === 'w' && playerSide === 'white') || 
                        (gameState.turn === 'b' && playerSide === 'black')
 
@@ -150,33 +156,18 @@ const ChessGame: React.FC = () => {
     return <GameSetup />
   }
 
-  // Debug logging for blank page issue
-  console.log('ChessGame render state:', {
-    gameMode,
-    gameStatus,
-    isCompetitive,
-    gameState,
-    selectedEngine,
-    playerSide
-  })
-
-  // Fallback for unexpected states
-  if (!gameState || !selectedEngine) {
-    return (
-      <div className="chess-game-layout">
-        <div className="loading-state">
-          <h2>Loading game...</h2>
-          <p>Game Mode: {gameMode}</p>
-          <p>Game Status: {gameStatus}</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className={`chess-game-layout ${isCompetitive ? 'competitive-mode' : 'research-mode'}`}>
+      {(enginesLoading || enginesError) && (
+        <div className="api-connectivity-banner" role="status">
+          {enginesLoading
+            ? 'Connecting to the ChessGPT API…'
+            : 'API offline: start chesstral-api on :8000'}
+        </div>
+      )}
       {/* Top Control Bar */}
       <div className="top-bar">
+        <div className="compact-game-title">♟ ChessGPT</div>
         <div className="game-info">
           <div className="players">
             <div className={`player ${playerSide === 'white' ? 'active' : ''}`}>
@@ -200,6 +191,7 @@ const ChessGame: React.FC = () => {
         </div>
 
         <div className="top-controls">
+          <button className="menu-button" onClick={handleMenu}>Menu</button>
           {/* Only show engine selector in research mode */}
           {!isCompetitive && (
         <EngineSelector 
@@ -229,12 +221,23 @@ const ChessGame: React.FC = () => {
         <GameControls
           onNewGame={resetGame}
           onFlipBoard={handleFlipBoard}
-          isThinking={isThinking}
-            showResign={isCompetitive}
-            onResign={handleResign}
+          showResign={isCompetitive}
+          onResign={handleResign}
         />
         </div>
       </div>
+
+      {error && (
+        <div className="game-error-banner" role="alert">
+          <span>{error}</span>
+          {errorIsAiMove && (
+            <button onClick={() => void retryAIMove()} disabled={isThinking}>
+              Retry AI move
+            </button>
+          )}
+          <button onClick={dismissError}>Dismiss</button>
+        </div>
+      )}
 
       {/* Main Game Area */}
       <div className="game-main">
@@ -245,7 +248,13 @@ const ChessGame: React.FC = () => {
             position={gameState.fen}
             onPieceDrop={onDrop}
             boardOrientation={boardOrientation}
-            arePiecesDraggable={!isThinking && !gameState.isGameOver && isPlayersTurn}
+            arePiecesDraggable={
+              gameStatus === 'active' &&
+              currentMoveIndex === fullGamePgn.length - 1 &&
+              !isThinking &&
+              !gameState.isGameOver &&
+              isPlayersTurn
+            }
               boardWidth={500}
             customBoardStyle={{
                 borderRadius: '4px',
@@ -295,11 +304,21 @@ const ChessGame: React.FC = () => {
             {activeTab === 'moves' && (
               <div className="moves-tab">
                 <MoveNavigation />
-                <MoveHistory moves={gameState.pgn} />
+                {!isCompetitive && currentOpening && (
+                  <div className="current-opening">
+                    Opening: <strong>{currentOpening.eco} {currentOpening.name}</strong>
+                  </div>
+                )}
+                <MoveHistory
+                  moves={fullGamePgn}
+                  startFen={startFen}
+                  currentMoveIndex={currentMoveIndex}
+                  onMoveClick={goToMove}
+                />
                 {/* Only show position input in research mode */}
                 {!isCompetitive && (
                 <div className="position-input-section">
-                  <PositionInput onLoadPosition={loadPosition} />
+                  <PositionInput onLoadPosition={loadPosition} disabled={isThinking} />
                 </div>
                 )}
               </div>
@@ -317,7 +336,7 @@ const ChessGame: React.FC = () => {
                   commentaryBoxRef={commentaryBoxRef}
                   commentaryHistory={commentaryHistory}
                   onRatingSubmit={handleRatingSubmit}
-                  uuid={`game-${Date.now()}`}
+                  uuid={gameId}
                 />
               </div>
             )}
@@ -364,11 +383,7 @@ const ChessGame: React.FC = () => {
               New Game
             </button>
               {isCompetitive && (
-                <button className="rematch-button" onClick={() => {
-                  // Switch sides and start new game
-                  setPlayerSide(playerSide === 'white' ? 'black' : 'white')
-                  resetGame()
-                }}>
+                <button className="rematch-button" onClick={switchSides}>
                   🔄 Rematch (Switch Sides)
                 </button>
               )}
