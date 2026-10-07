@@ -60,13 +60,7 @@ const EvaluationBar: React.FC<EvaluationBarProps> = ({ evaluation }) => {
               className="eval-fill"
               style={{
                 width: `${percentage}%`,
-                backgroundColor: color,
-                boxShadow: `0 0 10px ${color}40`,
               }}
-            />
-            <div
-              className="eval-marker"
-              style={{ left: `${percentage}%`, backgroundColor: color }}
             />
           </div>
         </div>

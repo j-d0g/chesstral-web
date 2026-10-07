@@ -50,7 +50,7 @@ const MoveNavigation: React.FC = () => {
         </button>
         
         <span className="move-counter">
-          {currentMoveIndex + 1} / {totalMoves || 1}
+          {currentMoveIndex + 1} / {totalMoves}
         </span>
         
         <button 
