@@ -70,6 +70,7 @@ interface GameStore {
   setTemperature: (temp: number) => void
   setTimeFormat: (format: ClockFormat) => void
   loadPosition: (fen: string, pgn?: string[]) => boolean
+  loadPgn: (pgnText: string) => boolean
   getAIMove: () => Promise<void>
   retryAIMove: () => Promise<void>
   evaluatePosition: () => Promise<void>
@@ -274,8 +275,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         positionVersion: state.positionVersion + 1,
       })
 
+      if (state.gameMode === 'research') void get().evaluatePosition()
       if (!isGameOver) {
-        if (state.gameMode === 'research') void get().evaluatePosition()
         void get().getAIMove()
       }
       return true
@@ -494,11 +495,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
         errorIsAiMove: false,
         positionVersion: state.positionVersion + 1,
       })
+      if (state.gameMode === 'research') void get().evaluatePosition()
       if (gameStatus === 'active' && !game.isGameOver()) {
-        if (state.gameMode === 'research') void get().evaluatePosition()
         if (isAiTurn(game, state.playerSide)) void get().getAIMove()
       }
       return true
+    } catch {
+      return false
+    }
+  },
+
+  loadPgn: (pgnText) => {
+    try {
+      const game = new Chess()
+      game.loadPgn(pgnText)
+      const startFen = game.header().FEN ?? START_FEN
+      return get().loadPosition(startFen, game.history())
     } catch {
       return false
     }
@@ -589,7 +601,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         errorIsAiMove: false,
         positionVersion: version + 1,
       })
-      if (!isGameOver && current.gameMode === 'research') void get().evaluatePosition()
+      if (current.gameMode === 'research') void get().evaluatePosition()
     } catch (error) {
       if (get().positionVersion === version) {
         console.error('AI move request failed:', error)
@@ -610,8 +622,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   evaluatePosition: async () => {
     const initial = get()
-    if (initial.gameMode !== 'research' || initial.game.isGameOver()) {
+    if (initial.gameMode !== 'research') {
       set({ evaluation: null })
+      return
+    }
+    if (initial.game.isGameOver()) {
+      const isCheckmate = initial.game.isCheckmate()
+      const score = isCheckmate ? initial.game.turn() === 'w' ? -1000 : 1000 : 0
+      set({ evaluation: { score, mate: isCheckmate ? 0 : null } })
       return
     }
     const version = initial.positionVersion

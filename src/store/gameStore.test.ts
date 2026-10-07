@@ -116,6 +116,47 @@ describe('game store', () => {
     expect(useGameStore.getState().game.fen()).toBe(expected.fen())
   })
 
+  it('loads PGN moves from a SetUp FEN header', () => {
+    const startFen = '8/P7/8/8/8/8/8/k6K w - - 0 1'
+    configureStore(START_FEN, { playerSide: 'black' })
+
+    expect(useGameStore.getState().loadPgn(
+      `[SetUp "1"]\n[FEN "${startFen}"]\n\n1. a8=N`,
+    )).toBe(true)
+    expect(useGameStore.getState().startFen).toBe(startFen)
+    expect(useGameStore.getState().fullGamePgn).toEqual(['a8=N'])
+  })
+
+  it('loads ordinary PGN with headers', () => {
+    configureStore(START_FEN, { playerSide: 'white' })
+
+    expect(useGameStore.getState().loadPgn('[Event "x"]\n\n1. e4 e5')).toBe(true)
+    expect(useGameStore.getState().startFen).toBe(START_FEN)
+    expect(useGameStore.getState().fullGamePgn).toEqual(['e4', 'e5'])
+  })
+
+  it('returns false for invalid PGN', () => {
+    expect(useGameStore.getState().loadPgn('[Event "x"]\n\n1. e4 e5 2. e5')).toBe(false)
+  })
+
+  it('evaluates checkmate locally from White’s perspective', async () => {
+    configureStore('7k/6Q1/6K1/8/8/8/8/8 b - - 0 1')
+
+    await useGameStore.getState().evaluatePosition()
+
+    expect(useGameStore.getState().evaluation).toEqual({ score: 1000, mate: 0 })
+    expect(apiService.evaluatePosition).not.toHaveBeenCalled()
+  })
+
+  it('evaluates stalemate locally as a draw', async () => {
+    configureStore('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1')
+
+    await useGameStore.getState().evaluatePosition()
+
+    expect(useGameStore.getState().evaluation).toEqual({ score: 0, mate: null })
+    expect(apiService.evaluatePosition).not.toHaveBeenCalled()
+  })
+
   it('truncates future moves when continuing from a replayed position', () => {
     useGameStore.getState().loadPosition(START_FEN, ['e4', 'e5', 'Nf3', 'Nc6'])
     useGameStore.getState().goToMove(1)

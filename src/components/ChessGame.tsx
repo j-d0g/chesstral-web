@@ -39,6 +39,8 @@ const ChessGame: React.FC = () => {
     errorIsAiMove,
     goToPreviousMove,
     goToNextMove,
+    goToStart,
+    goToEnd,
     makeHumanMove,
     setEngine,
     setGameMode,
@@ -49,6 +51,7 @@ const ChessGame: React.FC = () => {
     resignGame,
     goToMove,
     loadPosition,
+    loadPgn,
     markCommentaryReviewed,
     dismissError,
     retryAIMove,
@@ -56,6 +59,7 @@ const ChessGame: React.FC = () => {
 
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
   const [activeTab, setActiveTab] = useState<'moves' | 'analysis' | 'commentary' | 'settings'>('moves')
+  const [dismissedGameKey, setDismissedGameKey] = useState<string | null>(null)
   const commentaryBoxRef = useRef<HTMLDivElement>(null)
 
   // Check if the selected engine constrains player side
@@ -65,6 +69,7 @@ const ChessGame: React.FC = () => {
     fullGamePgn.slice(0, currentMoveIndex + 1),
     startFen,
   )
+  const gameOverKey = `${gameId}:${fullGamePgn.length}`
 
   // Remove the automatic side enforcement for NanoGPT - let users choose but show warning
   useEffect(() => {
@@ -87,23 +92,37 @@ const ChessGame: React.FC = () => {
   // Global keyboard navigation (works on any tab)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Only handle if not typing in an input field
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
         return
       }
-      
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        goToPreviousMove()
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        goToNextMove()
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          goToPreviousMove()
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          goToNextMove()
+          break
+        case 'Home':
+          e.preventDefault()
+          goToStart()
+          break
+        case 'End':
+          e.preventDefault()
+          goToEnd()
+          break
       }
     }
 
     document.addEventListener('keydown', handleKeyPress)
     return () => document.removeEventListener('keydown', handleKeyPress)
-  }, [goToPreviousMove, goToNextMove])
+  }, [goToPreviousMove, goToNextMove, goToStart, goToEnd])
 
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string) => {
@@ -228,6 +247,13 @@ const ChessGame: React.FC = () => {
         </div>
       </div>
 
+      {gameState.isGameOver && dismissedGameKey === gameOverKey && (
+        <div className="review-result-banner">
+          <span>{gameState.result}</span>
+          <button onClick={resetGame}>New Game</button>
+        </div>
+      )}
+
       {error && (
         <div className="game-error-banner" role="alert">
           <span>{error}</span>
@@ -319,7 +345,11 @@ const ChessGame: React.FC = () => {
                 {/* Only show position input in research mode */}
                 {!isCompetitive && (
                 <div className="position-input-section">
-                  <PositionInput onLoadPosition={loadPosition} disabled={isThinking} />
+                  <PositionInput
+                    onLoadPosition={loadPosition}
+                    onLoadPgn={loadPgn}
+                    disabled={isThinking}
+                  />
                 </div>
                 )}
               </div>
@@ -360,7 +390,7 @@ const ChessGame: React.FC = () => {
       )}
       
       {/* Game Over Modal */}
-      {gameState.isGameOver && (
+      {gameState.isGameOver && dismissedGameKey !== gameOverKey && (
         <div className="game-over-modal">
           <div className="game-over-content">
             <h2>Game Over!</h2>
@@ -380,9 +410,15 @@ const ChessGame: React.FC = () => {
               </div>
             </div>
             <div className="game-over-actions">
-            <button className="new-game-button" onClick={resetGame}>
-              New Game
-            </button>
+              <button
+                className="review-game-button"
+                onClick={() => setDismissedGameKey(gameOverKey)}
+              >
+                Review game
+              </button>
+              <button className="new-game-button" onClick={resetGame}>
+                New Game
+              </button>
               {isCompetitive && (
                 <button className="rematch-button" onClick={rematch}>
                   🔄 Rematch (Switch Sides)

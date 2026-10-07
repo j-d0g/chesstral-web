@@ -2,11 +2,16 @@ import React, { useState } from 'react'
 import { Chess } from 'chess.js'
 
 interface PositionInputProps {
-  onLoadPosition: (fen: string, pgn?: string[]) => boolean | void
+  onLoadPosition: (fen: string) => boolean | void
+  onLoadPgn: (pgnText: string) => boolean | void
   disabled?: boolean
 }
 
-const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition, disabled = false }) => {
+const PositionInput: React.FC<PositionInputProps> = ({
+  onLoadPosition,
+  onLoadPgn,
+  disabled = false,
+}) => {
   const [positionInput, setPositionInput] = useState('')
   const [inputType, setInputType] = useState<'pgn' | 'fen'>('pgn') // PGN is now default
   const [isExpanded, setIsExpanded] = useState(false)
@@ -21,8 +26,7 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition, disabled 
 
     try {
       if (inputType === 'pgn') {
-        const { pgn } = parsePgnMoves(trimmedInput);
-        if (onLoadPosition(new Chess().fen(), pgn) === false) {
+        if (onLoadPgn(trimmedInput) === false) {
           throw new Error('Unable to load this position')
         }
       } else {
@@ -38,42 +42,6 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition, disabled 
     }
   }
 
-  const parsePgnMoves = (pgnInput: string): { pgn: string[] } => {
-    try {
-      const game = new Chess()
-      
-      // Clean up the PGN input - remove move numbers and extra whitespace
-      let cleanPgn = pgnInput
-        .replace(/\d+\./g, '') // Remove move numbers like "1.", "2.", etc.
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .trim()
-      
-      // If it's empty after cleaning, return starting position
-      if (!cleanPgn) {
-        return { pgn: [] }
-      }
-      
-      // Split into individual moves
-      const moves = cleanPgn.split(/\s+/).filter(move => move.length > 0)
-      
-      // Apply each move
-      for (const move of moves) {
-        try {
-          const result = game.move(move)
-          if (!result) {
-            throw new Error(`Invalid move: "${move}"`)
-          }
-        } catch (moveError) {
-          throw new Error(`Invalid move "${move}": ${moveError instanceof Error ? moveError.message : 'Unknown error'}`)
-        }
-      }
-      
-      return { pgn: game.history() }
-    } catch (err) {
-      throw new Error(`PGN parsing error: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
-  }
-
   const validateFen = (fen: string): string => {
     try {
       // Test if FEN is valid by creating a Chess instance
@@ -85,14 +53,13 @@ const PositionInput: React.FC<PositionInputProps> = ({ onLoadPosition, disabled 
   }
 
   const handleLoadStartingPosition = () => {
-    onLoadPosition(new Chess().fen(), [])
+    onLoadPosition(new Chess().fen())
     setError(null)
   }
 
   const loadPresetPosition = (name: string, pgn: string) => {
     try {
-      const { pgn: pgnMoves } = parsePgnMoves(pgn)
-      if (onLoadPosition(new Chess().fen(), pgnMoves) === false) {
+      if (onLoadPgn(pgn) === false) {
         throw new Error('Unable to load this position')
       }
       setError(null)

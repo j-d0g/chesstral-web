@@ -25,6 +25,7 @@ describe('analysis helpers', () => {
     expect(evaluationWinChance({ score: -1_000, mate: 0 })).toBe(0)
     expect(formatEvaluation(1_000, 3)).toBe('M3')
     expect(formatEvaluation(-1_000, -2)).toBe('-M2')
+    expect(formatEvaluation(1_000, 0)).toBe('Checkmate')
     expect(formatEvaluation(-1_000, 0)).toBe('Checkmate')
   })
 })

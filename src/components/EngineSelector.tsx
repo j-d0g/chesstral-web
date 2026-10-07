@@ -18,8 +18,14 @@ const menuWidth = 240
 const getMenuPosition = (element: HTMLButtonElement): CSSProperties => {
   const rect = element.getBoundingClientRect()
   const height = Math.min(300, window.innerHeight - 16)
-  const width = Math.max(rect.width, menuWidth)
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+  const width = Math.min(
+    Math.max(rect.width, menuWidth),
+    Math.max(0, window.innerWidth - 16),
+  )
+  const left = Math.min(
+    Math.max(8, rect.left),
+    Math.max(8, window.innerWidth - width - 8),
+  )
   const top =
     rect.bottom + height + 4 <= window.innerHeight
       ? rect.bottom + 4
@@ -60,16 +66,26 @@ const EngineSelector: React.FC<EngineSelectorProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeMenus()
     }
+    const handleScroll = (event: Event) => {
+      const target = event.target
+      if (
+        target instanceof Node &&
+        (engineMenuRef.current?.contains(target) || modelMenuRef.current?.contains(target))
+      ) {
+        return
+      }
+      closeMenus()
+    }
 
     document.addEventListener('mousedown', handleClickOutside)
     document.addEventListener('keydown', handleKeyDown)
     window.addEventListener('resize', closeMenus)
-    window.addEventListener('scroll', closeMenus, true)
+    window.addEventListener('scroll', handleScroll, true)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('resize', closeMenus)
-      window.removeEventListener('scroll', closeMenus, true)
+      window.removeEventListener('scroll', handleScroll, true)
     }
   }, [])
 

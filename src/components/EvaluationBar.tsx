@@ -11,7 +11,9 @@ const EvaluationBar: React.FC<EvaluationBarProps> = ({ evaluation }) => {
   if (!evaluation) return null
 
   const { score, mate } = evaluation
-  const percentage = Math.max(5, Math.min(95, evaluationWinChance(evaluation) * 100))
+  const percentage = mate === 0
+    ? score > 0 ? 100 : 0
+    : Math.max(5, Math.min(95, evaluationWinChance(evaluation) * 100))
   const color = mate != null
     ? score > 0 ? '#2E7D32' : '#C62828'
     : Math.abs(score) > 3

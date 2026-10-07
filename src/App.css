@@ -339,24 +339,18 @@ main {
 }
 
 .engine-dropdown-menu, .model-dropdown-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  box-sizing: border-box;
   background: rgba(40, 40, 40, 0.98);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  margin-top: 0;
   z-index: 999999;
-  max-height: 300px;
   overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  /* Ensure dropdowns can escape parent containers */
-  min-width: 100%;
 }
 
 .engine-option, .model-option {
+  box-sizing: border-box;
   background: transparent;
   border: none;
   color: white;
@@ -1727,6 +1721,38 @@ main {
   gap: 15px;
   justify-content: center;
   margin-top: 20px;
+}
+
+.review-game-button {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.review-result-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.review-result-banner button {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  cursor: pointer;
 }
 
 .rematch-button {
