@@ -52,6 +52,25 @@ function configureStore(
   })
 }
 
+function setMoves(moves: string[]): void {
+  const game = new Chess(START_FEN)
+  for (const move of moves) game.move(move)
+  const history = game.history()
+  useGameStore.setState({
+    game,
+    gameState: {
+      fen: game.fen(),
+      pgn: history,
+      turn: game.turn(),
+      isGameOver: game.isGameOver(),
+      result: null,
+    },
+    startFen: START_FEN,
+    fullGamePgn: history,
+    currentMoveIndex: history.length - 1,
+  })
+}
+
 describe('game store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -84,6 +103,7 @@ describe('game store', () => {
   })
 
   it('loads PGN moves from the supplied starting position', () => {
+    configureStore(START_FEN, { playerSide: 'black' })
     expect(useGameStore.getState().loadPosition(START_FEN, ['e4', 'e5', 'Nf3'])).toBe(true)
     expect(useGameStore.getState().fullGamePgn).toEqual(['e4', 'e5', 'Nf3'])
     expect(useGameStore.getState().gameState.fen).toBe(new Chess('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2').fen())
@@ -151,6 +171,95 @@ describe('game store', () => {
     expect(useGameStore.getState().gameStatus).toBe('finished')
     expect(useGameStore.getState().gameState.result).toBe('White loses on time')
     now.mockRestore()
+  })
+
+  it('switches research sides without resetting the current game', () => {
+    configureStore(START_FEN, { gameStatus: 'active' })
+    setMoves(['e4'])
+    const commentary = [{
+      engineName: 'stockfish',
+      moveNumber: '1.',
+      moveSequence: 'e4',
+      commentary: 'Opening move',
+      fen: useGameStore.getState().game.fen(),
+      move: 'e4',
+      reviewed: false,
+    }]
+    useGameStore.setState({
+      commentaryHistory: commentary,
+      gameId: 'original-game',
+      error: 'previous error',
+      errorIsAiMove: true,
+    })
+    const before = useGameStore.getState()
+
+    before.switchSides()
+
+    const after = useGameStore.getState()
+    expect(after.playerSide).toBe('black')
+    expect(after.fullGamePgn).toBe(before.fullGamePgn)
+    expect(after.fullGamePgn).toEqual(['e4'])
+    expect(after.game).toBe(before.game)
+    expect(after.startFen).toBe(before.startFen)
+    expect(after.gameId).toBe('original-game')
+    expect(after.commentaryHistory).toBe(commentary)
+    expect(after.error).toBeNull()
+    expect(after.errorIsAiMove).toBe(false)
+    expect(apiService.getMove).not.toHaveBeenCalled()
+  })
+
+  it('requests an AI move after switching sides at the start of a research game', () => {
+    configureStore(START_FEN, { gameStatus: 'active' })
+    const before = useGameStore.getState()
+
+    before.switchSides()
+
+    expect(useGameStore.getState().playerSide).toBe('black')
+    expect(useGameStore.getState().fullGamePgn).toEqual([])
+    expect(useGameStore.getState().game).toBe(before.game)
+    expect(apiService.getMove).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not switch sides during an active competitive game', () => {
+    configureStore(START_FEN, { gameMode: 'competitive', gameStatus: 'active' })
+    const before = useGameStore.getState()
+
+    before.switchSides()
+
+    expect(useGameStore.getState().playerSide).toBe('white')
+    expect(useGameStore.getState().positionVersion).toBe(before.positionVersion)
+    expect(apiService.getMove).not.toHaveBeenCalled()
+  })
+
+  it('starts a new game on rematch after switching sides', () => {
+    configureStore(START_FEN, {
+      gameMode: 'competitive',
+      gameStatus: 'finished',
+      playerSide: 'black',
+    })
+    setMoves(['e4'])
+    const oldGameId = useGameStore.getState().gameId
+
+    useGameStore.getState().rematch()
+
+    expect(useGameStore.getState().playerSide).toBe('white')
+    expect(useGameStore.getState().gameStatus).toBe('active')
+    expect(useGameStore.getState().fullGamePgn).toEqual([])
+    expect(useGameStore.getState().currentMoveIndex).toBe(-1)
+    expect(useGameStore.getState().gameId).not.toBe(oldGameId)
+  })
+
+  it('reopens a nonterminal position after a finished research game', () => {
+    configureStore(START_FEN, { gameStatus: 'active' })
+    useGameStore.getState().resignGame()
+    expect(useGameStore.getState().gameStatus).toBe('finished')
+
+    expect(useGameStore.getState().loadPosition(START_FEN)).toBe(true)
+    expect(useGameStore.getState().gameStatus).toBe('active')
+
+    const mateFen = '7k/6Q1/6K1/8/8/8/8/8 b - - 0 1'
+    expect(useGameStore.getState().loadPosition(mateFen)).toBe(true)
+    expect(useGameStore.getState().gameStatus).toBe('finished')
   })
 
   it('charges the live side to move while browsing move history', () => {

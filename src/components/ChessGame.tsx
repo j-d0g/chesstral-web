@@ -44,6 +44,7 @@ const ChessGame: React.FC = () => {
     setGameMode,
     setTemperature,
     switchSides,
+    rematch,
     resetGame,
     resignGame,
     goToMove,
@@ -383,7 +384,7 @@ const ChessGame: React.FC = () => {
               New Game
             </button>
               {isCompetitive && (
-                <button className="rematch-button" onClick={switchSides}>
+                <button className="rematch-button" onClick={rematch}>
                   🔄 Rematch (Switch Sides)
                 </button>
               )}

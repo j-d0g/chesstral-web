@@ -64,6 +64,7 @@ interface GameStore {
   resignGame: () => void
   setGameMode: (mode: 'landing' | 'competitive' | 'research') => void
   switchSides: () => void
+  rematch: () => void
   setEngine: (engine: EngineConfig) => void
   setPlayerSide: (side: ClockSide) => void
   setTemperature: (temp: number) => void
@@ -400,7 +401,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   switchSides: () => {
     const state = get()
-    if (state.isThinking || state.gameMode === 'landing') return
+    if (
+      state.isThinking ||
+      state.gameMode === 'landing' ||
+      (state.gameMode === 'competitive' && state.gameStatus === 'active')
+    ) {
+      return
+    }
+    set({
+      playerSide: state.playerSide === 'white' ? 'black' : 'white',
+      positionVersion: state.positionVersion + 1,
+      error: null,
+      errorIsAiMove: false,
+    })
+    const current = get()
+    if (
+      current.gameStatus === 'active' &&
+      current.currentMoveIndex === current.fullGamePgn.length - 1 &&
+      isAiTurn(current.game, current.playerSide)
+    ) {
+      void current.getAIMove()
+    }
+  },
+
+  rematch: () => {
+    const state = get()
     set({ playerSide: state.playerSide === 'white' ? 'black' : 'white' })
     get().startGame()
   },
@@ -446,7 +471,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const moves = game.history()
       const nextState = gameStateFor(game, moves)
       const isActive = state.gameStatus === 'active'
-      const gameStatus = isActive
+      const gameStatus = state.gameMode === 'research' || isActive
         ? game.isGameOver() ? 'finished' : 'active'
         : state.gameStatus
       const now = Date.now()
