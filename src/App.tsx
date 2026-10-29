@@ -1,20 +1,22 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import ChessGame from './components/ChessGame'
 import { openingBook } from './services/openingBook'
+import { useGameStore } from './store/gameStore'
 import './App.css'
 
 function App() {
+  const loadEngines = useGameStore((state) => state.loadEngines)
+  const didLoadResources = useRef(false)
+
   useEffect(() => {
-    // Load opening book on app startup
-    openingBook.loadOpenings()
-  }, [])
+    if (didLoadResources.current) return
+    didLoadResources.current = true
+    void openingBook.loadOpenings()
+    void loadEngines()
+  }, [loadEngines])
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>ChessGPT Web v2</h1>
-        <p>Play chess against AI engines</p>
-      </header>
       <main>
         <ChessGame />
       </main>

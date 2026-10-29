@@ -1,11 +1,4 @@
-/**
- * GameSetup.tsx - Game Setup Screen
- * 
- * PURPOSE: Clean interface for configuring game settings before starting
- * FEATURES: Engine selection, color choice, temperature, start game button
- */
-
-import React, { useState } from 'react'
+import React from 'react'
 import { useGameStore } from '../store/gameStore'
 import EngineSelector from './EngineSelector'
 import TemperatureControl from './TemperatureControl'
@@ -15,54 +8,56 @@ const GameSetup: React.FC = () => {
     selectedEngine,
     playerSide,
     gameMode,
+    timeFormat,
+    engines,
+    enginesError,
+    enginesLoading,
     setEngine,
+    setGameMode,
     setPlayerSide,
     setTimeFormat,
     startGame,
   } = useGameStore()
 
-  // Competitive mode specific state
-  const [playerElo, setPlayerElo] = useState<string>('')
-  const [eloType, setEloType] = useState<'fide' | 'chess.com' | 'lichess'>('lichess')
-  const [timeFormatLocal, setTimeFormatLocal] = useState<'blitz' | 'rapid' | 'classical' | 'unlimited'>('unlimited')
-
   const isNanoGPT = selectedEngine.type === 'nanogpt'
   const isCompetitive = gameMode === 'competitive'
-
-  const handleStartGame = () => {
-    // Save the time format to the store
-    setTimeFormat(timeFormatLocal)
-    startGame()
-  }
+  const hasAvailableEngine = engines.some((engine) => engine.status === 'available')
 
   return (
     <div className={`game-setup ${isCompetitive ? 'competitive-setup' : ''}`}>
+      {(enginesLoading || enginesError) && (
+        <div className="api-connectivity-banner" role="status">
+          {enginesLoading
+            ? 'Connecting to the ChessGPT API…'
+            : 'API offline: start chesstral-api on :8000'}
+        </div>
+      )}
       <div className="setup-header">
-        <h1>
-          {isCompetitive ? '🏆 Competitive Match' : '🎯 ChessGPT Playground'}
-        </h1>
+        <button className="setup-back-button" onClick={() => setGameMode('landing')}>
+          ← Back
+        </button>
+        <h1>{isCompetitive ? '🏆 Challenge' : '🎯 Research Playground'}</h1>
         <p>
-          {isCompetitive 
-            ? 'Configure your rated game settings - this match will be recorded'
-            : 'Configure your game settings and start playing against AI engines'
-          }
+          {isCompetitive
+            ? 'Play a timed game with no engine evaluation, analysis, or takebacks.'
+            : 'Explore positions and analyze games with an AI chess engine.'}
         </p>
       </div>
 
       <div className="setup-content">
         <div className="setup-section">
           <h3>🤖 Choose Your Opponent</h3>
-          <EngineSelector 
+          <EngineSelector
             selectedEngine={selectedEngine}
             onEngineChange={setEngine}
-            disabled={false} // Allow selection during setup in both modes
+            disabled={false}
           />
         </div>
 
         <div className="setup-section">
           <h3>⚫⚪ Choose Your Color</h3>
           <div className="color-selector">
-            <button 
+            <button
               className={`color-btn ${playerSide === 'white' ? 'active' : ''}`}
               onClick={() => setPlayerSide('white')}
             >
@@ -70,7 +65,7 @@ const GameSetup: React.FC = () => {
               <span>Play as White</span>
               <span className="color-desc">You move first</span>
             </button>
-            <button 
+            <button
               className={`color-btn ${playerSide === 'black' ? 'active' : ''}`}
               onClick={() => setPlayerSide('black')}
             >
@@ -80,94 +75,54 @@ const GameSetup: React.FC = () => {
             </button>
           </div>
 
-          {/* NanoGPT Performance Warning */}
           {isNanoGPT && playerSide === 'white' && (
             <div className="nanogpt-warning">
-              ⚠️ <strong>Performance Notice:</strong> NanoGPT was trained to play as White and performs best in that role. 
-              When you play as White (forcing NanoGPT to play as Black), its performance will be significantly reduced.
+              ⚠️ <strong>Performance Notice:</strong> NanoGPT was trained to play as White and
+              performs best in that role. When you play as White, it must play as Black.
             </div>
           )}
         </div>
 
-        {/* Competitive Mode Specific Settings */}
         {isCompetitive && (
-          <>
-            <div className="setup-section">
-              <h3>📊 Your Rating</h3>
-              <div className="rating-input">
-                <div className="rating-type-selector">
-                  <button 
-                    className={`rating-type-btn ${eloType === 'fide' ? 'active' : ''}`}
-                    onClick={() => setEloType('fide')}
-                  >
-                    FIDE
-                  </button>
-                  <button 
-                    className={`rating-type-btn ${eloType === 'chess.com' ? 'active' : ''}`}
-                    onClick={() => setEloType('chess.com')}
-                  >
-                    Chess.com
-                  </button>
-                  <button 
-                    className={`rating-type-btn ${eloType === 'lichess' ? 'active' : ''}`}
-                    onClick={() => setEloType('lichess')}
-                  >
-                    Lichess
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  placeholder="Enter your rating (optional)"
-                  value={playerElo}
-                  onChange={(e) => setPlayerElo(e.target.value)}
-                  className="elo-input"
-                  min="400"
-                  max="3000"
-                />
-              </div>
+          <div className="setup-section">
+            <h3>⏱️ Time Format</h3>
+            <div className="time-format-selector">
+              <button
+                className={`time-btn ${timeFormat === 'blitz' ? 'active' : ''}`}
+                onClick={() => setTimeFormat('blitz')}
+              >
+                <span className="time-icon">⚡</span>
+                <span>Blitz</span>
+                <span className="time-desc">3+2 minutes</span>
+              </button>
+              <button
+                className={`time-btn ${timeFormat === 'rapid' ? 'active' : ''}`}
+                onClick={() => setTimeFormat('rapid')}
+              >
+                <span className="time-icon">🏃</span>
+                <span>Rapid</span>
+                <span className="time-desc">10+5 minutes</span>
+              </button>
+              <button
+                className={`time-btn ${timeFormat === 'classical' ? 'active' : ''}`}
+                onClick={() => setTimeFormat('classical')}
+              >
+                <span className="time-icon">🏛️</span>
+                <span>Classical</span>
+                <span className="time-desc">30+30 minutes</span>
+              </button>
+              <button
+                className={`time-btn ${timeFormat === 'unlimited' ? 'active' : ''}`}
+                onClick={() => setTimeFormat('unlimited')}
+              >
+                <span className="time-icon">♾️</span>
+                <span>Unlimited</span>
+                <span className="time-desc">No time limit</span>
+              </button>
             </div>
-
-            <div className="setup-section">
-              <h3>⏱️ Time Format</h3>
-              <div className="time-format-selector">
-                <button 
-                  className={`time-btn ${timeFormatLocal === 'blitz' ? 'active' : ''}`}
-                  onClick={() => setTimeFormatLocal('blitz')}
-                >
-                  <span className="time-icon">⚡</span>
-                  <span>Blitz</span>
-                  <span className="time-desc">3+2 minutes</span>
-                </button>
-                <button 
-                  className={`time-btn ${timeFormatLocal === 'rapid' ? 'active' : ''}`}
-                  onClick={() => setTimeFormatLocal('rapid')}
-                >
-                  <span className="time-icon">🏃</span>
-                  <span>Rapid</span>
-                  <span className="time-desc">10+5 minutes</span>
-                </button>
-                <button 
-                  className={`time-btn ${timeFormatLocal === 'classical' ? 'active' : ''}`}
-                  onClick={() => setTimeFormatLocal('classical')}
-                >
-                  <span className="time-icon">🏛️</span>
-                  <span>Classical</span>
-                  <span className="time-desc">30+30 minutes</span>
-                </button>
-                <button 
-                  className={`time-btn ${timeFormatLocal === 'unlimited' ? 'active' : ''}`}
-                  onClick={() => setTimeFormatLocal('unlimited')}
-                >
-                  <span className="time-icon">♾️</span>
-                  <span>Unlimited</span>
-                  <span className="time-desc">No time limit</span>
-                </button>
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
-        {/* Research Mode Temperature Control */}
         {!isCompetitive && (
           <div className="setup-section">
             <h3>🌡️ AI Temperature</h3>
@@ -176,11 +131,12 @@ const GameSetup: React.FC = () => {
         )}
 
         <div className="setup-actions">
-          <button 
+          <button
             className="start-game-btn"
-            onClick={handleStartGame}
+            onClick={startGame}
+            disabled={enginesLoading || !hasAvailableEngine}
           >
-            {isCompetitive ? '🏆 Start Rated Game' : '🚀 Start Game'}
+            {isCompetitive ? 'Start Timed Game' : '🚀 Start Game'}
           </button>
         </div>
       </div>
@@ -188,4 +144,4 @@ const GameSetup: React.FC = () => {
   )
 }
 
-export default GameSetup 
+export default GameSetup

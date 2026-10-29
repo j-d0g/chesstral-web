@@ -1,111 +1,107 @@
-import React, {useEffect, useState} from 'react';
-import '../styles/RatingForm.css';
+import React, { useState } from 'react'
+import { describeApiError } from '../services/apiService'
+import '../styles/RatingForm.css'
 
-type RatingFormProps = {
-  onSubmit: (rating: { quality: number; correctness: number; relevance: number; salience: number; review: string }) => void;
-};
+export interface MoveRating {
+  quality: number
+  responsiveness: number
+  correctness: number
+  relevance: number
+  salience: number
+  review: string
+}
+
+interface RatingFormProps {
+  onSubmit: (rating: MoveRating) => Promise<void>
+}
+
+const categories: Array<{ key: keyof Omit<MoveRating, 'review'>; label: string }> = [
+  { key: 'quality', label: 'Move Quality' },
+  { key: 'responsiveness', label: 'Move Responsiveness' },
+  { key: 'correctness', label: 'Thoughts Correctness' },
+  { key: 'relevance', label: 'Thoughts Relevance' },
+  { key: 'salience', label: 'Thoughts Salience' },
+]
 
 const RatingForm: React.FC<RatingFormProps> = ({ onSubmit }) => {
-  const [quality, setQuality] = useState(0);
-  const [correctness, setCorrectness] = useState(0);
-  const [relevance, setRelevance] = useState(0);
-  const [salience, setSalience] = useState(0);
-  const [review, setReview] = useState('');
+  const [ratings, setRatings] = useState<Omit<MoveRating, 'review'>>({
+    quality: 0,
+    responsiveness: 0,
+    correctness: 0,
+    relevance: 0,
+    salience: 0,
+  })
+  const [review, setReview] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const allRated = Object.values(ratings).every((rating) => rating >= 1 && rating <= 5)
+  const disabled = status === 'saving' || status === 'saved'
 
-  useEffect(() => {
-    checkRatingFilled();
-  }, [quality, correctness, relevance, salience]);
+  const updateRating = (key: keyof typeof ratings, value: number) => {
+    setRatings((current) => ({ ...current, [key]: value }))
+    setStatus('idle')
+    setError(null)
+  }
 
-  const [isRatingFilled, setIsRatingFilled] = useState(false);
-  const checkRatingFilled = () => {
-    setIsRatingFilled(quality > 0 && correctness > 0 && relevance > 0 && salience > 0);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!allRated || disabled) return
 
-  };
-  const handleStarClick = (category: string, value: number) => {
-    switch (category) {
-      case 'quality':
-        setQuality(value);
-        break;
-      case 'correctness':
-        setCorrectness(value);
-        break;
-      case 'relevance':
-        setRelevance(value);
-        break;
-      case 'salience':
-        setSalience(value);
-        break;
-      default:
-        break;
+    setStatus('saving')
+    setError(null)
+    try {
+      await onSubmit({ ...ratings, review })
+      setStatus('saved')
+    } catch (submitError) {
+      setStatus('failed')
+      setError(describeApiError(submitError))
     }
-  };
-
-  const renderStars = (category: string, value: number) => {
-    const stars = [];
-    for (let i = 5; i >= 1; i--) {
-      stars.push(
-        <span
-          key={i}
-          className={`star ${i <= value ? 'filled' : ''}`}
-          onClick={() => handleStarClick(category, i)}
-        >
-          &#9733;
-        </span>
-      );
-    }
-    return stars;
-  };
-
-  const handleReviewChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setReview(event.target.value);
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    onSubmit({ quality, correctness, relevance, salience, review });
-  };
+  }
 
   return (
-    <form className="rating-form" onSubmit={handleSubmit}>
-      <div className="rating-item">
-        <label>Move Quality:</label>
-        <div className="star-rating">{renderStars('quality', quality)}</div>
-      </div>
-      <div className="rating-item">
-        <label>Move Responsiveness:</label>
-        <div className="star-rating">{renderStars('quality', quality)}</div>
-      </div>
-      <div className="rating-item">
-        <label>Thoughts Correctness:</label>
-        <div className="star-rating">{renderStars('correctness', correctness)}</div>
-      </div>
-      <div className="rating-item">
-        <label>Thoughts Relevance:</label>
-        <div className="star-rating">{renderStars('relevance', relevance)}</div>
-      </div>
-      <div className="rating-item">
-        <label>Thoughts Salience:</label>
-        <div className="star-rating">{renderStars('salience', salience)}</div>
-      </div>
+    <form className="rating-form" onSubmit={submit}>
+      {categories.map(({ key, label }) => (
+        <div className="rating-item" key={key}>
+          <label>{label}:</label>
+          <div className="star-rating">
+            {[5, 4, 3, 2, 1].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`star ${value <= ratings[key] ? 'filled' : ''}`}
+                aria-label={`${label}: ${value} of 5`}
+                aria-pressed={ratings[key] === value}
+                disabled={disabled}
+                onClick={() => updateRating(key, value)}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       <div className="rating-item">
         <label htmlFor="review">Review:</label>
         <textarea
           id="review"
           value={review}
-          onChange={handleReviewChange}
-            placeholder="
-            MOVE QUALITY - How good/human-like the move was for a beginner.
-            MOVE RESPONSIVENESS - How attentively the move appears to respond to the current board-state / previous move(s).
-            THOUGHTS CORRECTNESS - How factually accurate the comments were.
-            THOUGHTS RELEVANCE - How relevant the comments were to the move made.
-            THOUGHTS SALIENCE - How useful were the comments, i.e did they place attention on the right things?"
-        ></textarea>
+          onChange={(event) => {
+            setReview(event.target.value)
+            setStatus('idle')
+            setError(null)
+          }}
+          maxLength={5000}
+          disabled={disabled}
+          placeholder="Share any additional feedback about the move and commentary."
+        />
       </div>
-      <button type="submit" disabled={!isRatingFilled}>
-        Submit
+      <button type="submit" disabled={!allRated || disabled}>
+        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Submit'}
       </button>
+      {status === 'saved' && <p role="status">Rating saved.</p>}
+      {error && <p role="alert">{error}</p>}
     </form>
-  );
-};
+  )
+}
 
-export default RatingForm;
+export default RatingForm

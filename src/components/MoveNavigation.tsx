@@ -5,12 +5,13 @@
  * FEATURES: Previous/Next move, Go to start/end, keyboard shortcuts
  */
 
-import React, { useEffect } from 'react'
+import React from 'react'
 import { useGameStore } from '../store/gameStore'
 
 const MoveNavigation: React.FC = () => {
   const {
     gameMode,
+    isThinking,
     currentMoveIndex,
     fullGamePgn,
     goToMove,
@@ -20,38 +21,6 @@ const MoveNavigation: React.FC = () => {
     goToEnd,
     continueFromHere,
   } = useGameStore()
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle arrow keys when not typing in an input
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
-
-      switch (event.key) {
-        case 'ArrowLeft':
-          event.preventDefault()
-          goToPreviousMove()
-          break
-        case 'ArrowRight':
-          event.preventDefault()
-          goToNextMove()
-          break
-        case 'Home':
-          event.preventDefault()
-          goToStart()
-          break
-        case 'End':
-          event.preventDefault()
-          goToEnd()
-          break
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [goToPreviousMove, goToNextMove, goToStart, goToEnd])
 
   const isAtStart = currentMoveIndex === -1
   const isAtEnd = currentMoveIndex === fullGamePgn.length - 1
@@ -64,7 +33,7 @@ const MoveNavigation: React.FC = () => {
       <div className="move-controls">
         <button 
           onClick={goToStart}
-          disabled={isAtStart}
+          disabled={isThinking || isAtStart}
           className="nav-btn"
           title="Go to start (Home)"
         >
@@ -73,7 +42,7 @@ const MoveNavigation: React.FC = () => {
         
         <button 
           onClick={goToPreviousMove}
-          disabled={isAtStart}
+          disabled={isThinking || isAtStart}
           className="nav-btn"
           title="Previous move (←)"
         >
@@ -81,12 +50,12 @@ const MoveNavigation: React.FC = () => {
         </button>
         
         <span className="move-counter">
-          {currentMoveIndex + 1} / {totalMoves || 1}
+          {currentMoveIndex + 1} / {totalMoves}
         </span>
         
         <button 
           onClick={goToNextMove}
-          disabled={isAtEnd || totalMoves === 0}
+          disabled={isThinking || isAtEnd || totalMoves === 0}
           className="nav-btn"
           title="Next move (→)"
         >
@@ -95,7 +64,7 @@ const MoveNavigation: React.FC = () => {
         
         <button 
           onClick={goToEnd}
-          disabled={isAtEnd || totalMoves === 0}
+          disabled={isThinking || isAtEnd || totalMoves === 0}
           className="nav-btn"
           title="Go to end (End)"
         >
@@ -112,6 +81,7 @@ const MoveNavigation: React.FC = () => {
             value={currentMoveIndex}
             onChange={(e) => goToMove(parseInt(e.target.value))}
             className="move-slider"
+            disabled={isThinking}
           />
         </div>
       )}
@@ -121,6 +91,7 @@ const MoveNavigation: React.FC = () => {
         <div className="continue-from-here">
           <button 
             onClick={continueFromHere}
+            disabled={isThinking}
             className="continue-btn"
             title="Continue playing from this position (truncates future moves)"
           >

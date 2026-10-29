@@ -3,7 +3,6 @@ import React from 'react'
 interface GameControlsProps {
   onNewGame: () => void
   onFlipBoard: () => void
-  isThinking: boolean
   showResign?: boolean
   onResign?: () => void
 }
@@ -11,7 +10,6 @@ interface GameControlsProps {
 const GameControls: React.FC<GameControlsProps> = ({
   onNewGame,
   onFlipBoard,
-  isThinking,
   showResign = false,
   onResign,
 }) => {
@@ -22,7 +20,6 @@ const GameControls: React.FC<GameControlsProps> = ({
       <div className="control-buttons">
         <button 
           onClick={onNewGame}
-          disabled={isThinking}
           className="control-button new-game"
         >
           🔄 New Game
@@ -30,7 +27,6 @@ const GameControls: React.FC<GameControlsProps> = ({
         
         <button 
           onClick={onFlipBoard}
-          disabled={isThinking}
           className="control-button flip-board"
         >
           🔄 Flip Board
@@ -39,7 +35,6 @@ const GameControls: React.FC<GameControlsProps> = ({
         {showResign && onResign && (
           <button 
             onClick={onResign}
-            disabled={isThinking}
             className="control-button resign"
           >
             🏳️ Resign
