@@ -43,14 +43,6 @@ App.tsx (Root)
 | `PositionInput.tsx` | Load FEN/PGN positions | `onLoadPosition` | Position parsing |
 | `TemperatureControl.tsx` | AI creativity settings | `temperature`, `onChange` | Slider control |
 
-### **Legacy Components** (v1 compatibility)
-
-| Component | Status | Replacement |
-|-----------|--------|-------------|
-| `Board.tsx` | Legacy | `ChessGame.tsx` |
-| `ControlPanel.tsx` | Legacy | `EngineSelector.tsx` + `GameControls.tsx` |
-| `BoardImporter.tsx` | Legacy | `PositionInput.tsx` |
-
 ## 🎯 Adding New Components
 
 ### **1. Component Template**
