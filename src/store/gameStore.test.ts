@@ -322,4 +322,23 @@ describe('game store', () => {
     expect(useGameStore.getState().clock.black).toBe(8_000)
     now.mockRestore()
   })
+
+  it.each(['White resigned', 'Black loses on time', 'White wins by checkmate'])(
+    'preserves the finished result while reviewing moves: %s', (result) => {
+      configureStore(START_FEN, { gameMode: 'competitive', gameStatus: 'finished' })
+      setMoves(['e4', 'e5'])
+      useGameStore.setState((state) => ({
+        gameState: { ...state.gameState, isGameOver: true, result },
+      }))
+
+      useGameStore.getState().goToStart()
+      expect(useGameStore.getState().game.fen()).toBe(START_FEN)
+      expect(useGameStore.getState().gameState.isGameOver).toBe(true)
+      expect(useGameStore.getState().gameState.result).toBe(result)
+
+      useGameStore.getState().goToEnd()
+      expect(useGameStore.getState().gameState.result).toBe(result)
+      expect(useGameStore.getState().gameStatus).toBe('finished')
+    },
+  )
 })

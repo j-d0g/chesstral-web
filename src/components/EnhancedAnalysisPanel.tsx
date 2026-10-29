@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Chess } from 'chess.js'
 import { apiService, describeApiError } from '../services/apiService'
 import { openingBook } from '../services/openingBook'
 import { useGameStore } from '../store/gameStore'
 import {
-  calculateMoveAccuracy,
-  classifyMove,
+  analyzeMoves,
   type MoveAnalysis,
   type MoveClassification,
 } from '../utils/analysis'
@@ -37,6 +35,7 @@ const EnhancedAnalysisPanel: React.FC = () => {
     setIsAnalyzing(false)
     setAnalysisProgress(0)
     setAnalysisError(null)
+    return () => { analysisRun.current += 1 }
   }, [fullGamePgn, startFen])
 
   const stats = useMemo(() => {
@@ -82,58 +81,19 @@ const EnhancedAnalysisPanel: React.FC = () => {
     setIsAnalyzing(true)
     setAnalysisProgress(0)
     setAnalysisError(null)
+    setMoveAnalyses([])
 
     try {
-      const replay = new Chess(startFen)
-      const initial = await apiService.evaluatePosition({ fen: replay.fen(), depth: analysisDepth })
-      let previous = { score: initial.evaluation, mate: initial.mate }
-      const analyses: MoveAnalysis[] = []
-
-      for (let index = 0; index < fullGamePgn.length; index += 1) {
-        if (analysisRun.current !== run) return
-
-        const move = fullGamePgn[index]
-        const isWhiteMove = replay.turn() === 'w'
-        const moveNumber = Number(replay.fen().split(' ')[5]) || 1
-        replay.move(move)
-        const fen = replay.fen()
-        const openingInfo = openingBook.lookupOpening(fen)
-        let current = previous
-        let bestMove: string | undefined
-        let principalVariation: string[] | undefined
-
-        try {
-          const response = await apiService.evaluatePosition({ fen, depth: analysisDepth })
-          current = { score: response.evaluation, mate: response.mate }
-          bestMove = response.best_move
-          principalVariation = response.analysis?.pv
-        } catch (error) {
-          setAnalysisError(describeApiError(error))
-          console.error(`Failed to evaluate move ${index + 1}:`, error)
-        }
-
-        if (analysisRun.current !== run) return
-        const accuracy = calculateMoveAccuracy(previous, current, isWhiteMove)
-        analyses.push({
-          moveNumber,
-          move,
-          fen,
-          evaluation: current.score,
-          mate: current.mate,
-          bestMove,
-          principalVariation,
-          classification: openingInfo ? 'book' : classifyMove(accuracy.winChanceLoss),
-          evaluationLoss: Math.abs(current.score - previous.score),
-          winChanceLoss: openingInfo ? 0 : accuracy.winChanceLoss,
-          accuracy: openingInfo ? 100 : accuracy.accuracy,
-          openingInfo: openingInfo ?? undefined,
-          isWhiteMove,
-        })
-        previous = current
-        setAnalysisProgress(((index + 1) / fullGamePgn.length) * 100)
-      }
-
-      if (analysisRun.current === run) setMoveAnalyses(analyses)
+      const analyses = await analyzeMoves(
+        startFen,
+        fullGamePgn,
+        analysisDepth,
+        (request) => apiService.evaluatePosition(request),
+        (fen) => openingBook.lookupOpening(fen),
+        setAnalysisProgress,
+        () => analysisRun.current === run,
+      )
+      if (analyses && analysisRun.current === run) setMoveAnalyses(analyses)
     } catch (error) {
       if (analysisRun.current === run) setAnalysisError(describeApiError(error))
       console.error('Failed to analyze game:', error)

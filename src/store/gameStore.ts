@@ -699,9 +699,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     try {
       const moves = state.fullGamePgn.slice(0, clampedIndex + 1)
       const game = replayGame(state.startFen, moves)
+      const gameState = gameStateFor(game, moves)
       set({
         game,
-        gameState: gameStateFor(game, moves),
+        gameState: state.gameStatus === 'finished'
+          ? { ...gameState, isGameOver: true, result: state.gameState.result }
+          : gameState,
         currentMoveIndex: clampedIndex,
         evaluation: null,
         error: null,

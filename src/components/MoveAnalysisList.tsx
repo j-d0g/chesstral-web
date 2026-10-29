@@ -51,7 +51,7 @@ const MoveAnalysisList: React.FC<MoveAnalysisListProps> = ({
                   }}
                 >
                   <span className="move-number">
-                    {index % 2 === 0 ? `${Math.ceil((index + 1) / 2)}.` : `${Math.ceil((index + 1) / 2)}...`}
+                    {analysis.moveNumber}{analysis.isWhiteMove ? '.' : '...'}
                   </span>
                   <span className="move-notation">{analysis.move}</span>
                   <span className="move-classification" style={{ color: style.color }}>
